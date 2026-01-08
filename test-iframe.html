@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Browse Extension - Iframe Test</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      padding: 20px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      margin: 0;
+    }
+    h1 {
+      color: white;
+      text-align: center;
+      margin-bottom: 30px;
+    }
+    .section {
+      background: white;
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 20px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+    }
+    .section h2 {
+      margin-top: 0;
+      color: #333;
+      border-bottom: 2px solid #667eea;
+      padding-bottom: 10px;
+    }
+    .button-group {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    button {
+      padding: 12px 24px;
+      font-size: 14px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-weight: 500;
+    }
+    button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+    .btn-primary { background: #667eea; color: white; }
+    .btn-secondary { background: #48bb78; color: white; }
+    .btn-danger { background: #f56565; color: white; }
+    .btn-warning { background: #ed8936; color: white; }
+    .btn-info { background: #4299e1; color: white; }
+
+    input[type="text"] {
+      padding: 10px 15px;
+      border: 2px solid #e2e8f0;
+      border-radius: 8px;
+      font-size: 14px;
+      width: 200px;
+    }
+    input[type="text"]:focus {
+      outline: none;
+      border-color: #667eea;
+    }
+
+    iframe {
+      width: 100%;
+      height: 350px;
+      border: 3px solid #667eea;
+      border-radius: 12px;
+      background: #f7fafc;
+    }
+
+    .info {
+      background: #ebf8ff;
+      border-left: 4px solid #4299e1;
+      padding: 15px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+    }
+    .info strong {
+      color: #2b6cb0;
+    }
+  </style>
+</head>
+<body>
+  <h1>🧪 Browse Extension - Iframe Test Page</h1>
+
+  <div class="info">
+    <strong>Instructions:</strong>
+    <ol>
+      <li>Make sure the Browse extension is installed and enabled</li>
+      <li>Configure your API key in the extension popup</li>
+      <li>Press <code>Option+Shift+B</code> (Mac) or <code>Alt+Shift+B</code> (Windows/Linux) to activate</li>
+      <li>You should see annotations on BOTH main page buttons AND iframe buttons!</li>
+    </ol>
+  </div>
+
+  <div class="section">
+    <h2>🎯 Main Page Controls</h2>
+    <div class="button-group">
+      <button class="btn-primary" onclick="alert('Main: Submit clicked!')">Submit</button>
+      <button class="btn-secondary" onclick="alert('Main: Save clicked!')">Save Draft</button>
+      <button class="btn-danger" onclick="alert('Main: Delete clicked!')">Delete</button>
+      <button class="btn-warning" onclick="alert('Main: Cancel clicked!')">Cancel</button>
+      <button class="btn-info" onclick="alert('Main: Help clicked!')">Help</button>
+    </div>
+    <div style="margin-top: 15px;">
+      <input type="text" placeholder="Search main page...">
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>🖼️ Same-Origin Iframe (srcdoc)</h2>
+    <p style="color: #718096; font-size: 14px;">This iframe uses <code>srcdoc</code> which creates a same-origin context. The extension CAN scan this!</p>
+    <iframe id="iframe1"></iframe>
+  </div>
+
+  <div class="section">
+    <h2>🔗 Another Same-Origin Iframe (srcdoc)</h2>
+    <p style="color: #718096; font-size: 14px;">A second iframe to test multiple iframe support.</p>
+    <iframe id="iframe2"></iframe>
+  </div>
+
+  <script>
+    // Populate iframes with content using srcdoc (same-origin)
+    const iframe1Content = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <style>
+          body {
+            font-family: sans-serif;
+            padding: 20px;
+            background: linear-gradient(to right, #ffeaa7, #dfe6e9);
+          }
+          h3 { color: #2d3436; }
+          .btn-group { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 15px; }
+          button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 500;
+          }
+          .btn-a { background: #00b894; color: white; }
+          .btn-b { background: #0984e3; color: white; }
+          .btn-c { background: #e84393; color: white; }
+          .btn-d { background: #fdcb6e; color: #2d3436; }
+          input {
+            padding: 8px 12px;
+            border: 2px solid #b2bec3;
+            border-radius: 6px;
+            width: 180px;
+          }
+        </style>
+      </head>
+      <body>
+        <h3>📁 Iframe 1: File Manager</h3>
+        <div class="btn-group">
+          <button class="btn-a" onclick="alert('Iframe1: Upload clicked!')">Upload File</button>
+          <button class="btn-b" onclick="alert('Iframe1: New Folder clicked!')">New Folder</button>
+          <button class="btn-c" onclick="alert('Iframe1: Share clicked!')">Share</button>
+          <button class="btn-d" onclick="alert('Iframe1: Download clicked!')">Download All</button>
+        </div>
+        <input type="text" placeholder="Search files...">
+        <div style="margin-top: 15px; padding: 10px; background: white; border-radius: 6px;">
+          <strong>Test:</strong> Try pressing keyboard shortcuts from main page!
+        </div>
+      </body>
+      </html>
+    `;
+
+    const iframe2Content = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <style>
+          body {
+            font-family: sans-serif;
+            padding: 20px;
+            background: linear-gradient(to right, #a8e6cf, #dcedc1);
+          }
+          h3 { color: #2d3436; }
+          .toolbar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 15px; }
+          button {
+            padding: 10px 18px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+          }
+          .btn-1 { background: #ff7675; color: white; }
+          .btn-2 { background: #74b9ff; color: white; }
+          .btn-3 { background: #55efc4; color: #2d3436; }
+          .btn-4 { background: #a29bfe; color: white; }
+          .btn-5 { background: #fd79a8; color: white; }
+          select {
+            padding: 8px 12px;
+            border: 2px solid #b2bec3;
+            border-radius: 6px;
+            background: white;
+          }
+        </style>
+      </head>
+      <body>
+        <h3>🎨 Iframe 2: Image Editor</h3>
+        <div class="toolbar">
+          <button class="btn-1" onclick="alert('Iframe2: Crop clicked!')">Crop</button>
+          <button class="btn-2" onclick="alert('Iframe2: Rotate clicked!')">Rotate</button>
+          <button class="btn-3" onclick="alert('Iframe2: Filter clicked!')">Filters</button>
+          <button class="btn-4" onclick="alert('Iframe2: Adjust clicked!')">Adjust</button>
+          <button class="btn-5" onclick="alert('Iframe2: Export clicked!')">Export</button>
+        </div>
+        <select>
+          <option>Select filter...</option>
+          <option>Grayscale</option>
+          <option>Sepia</option>
+          <option>Blur</option>
+        </select>
+        <div style="margin-top: 15px; padding: 15px; background: white; border-radius: 6px;">
+          <strong>Expected behavior:</strong>
+          <ul style="margin: 10px 0 0 20px;">
+            <li>Extension should find buttons in BOTH iframes</li>
+            <li>Each button gets a keyboard shortcut (a, b, c, etc.)</li>
+            <li>Pressing the shortcut clicks the button inside the iframe</li>
+          </ul>
+        </div>
+      </body>
+      </html>
+    `;
+
+    document.getElementById('iframe1').srcdoc = iframe1Content;
+    document.getElementById('iframe2').srcdoc = iframe2Content;
+
+    console.log('Test page loaded with 2 same-origin iframes');
+  </script>
+</body>
+</html>
