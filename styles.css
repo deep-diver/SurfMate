@@ -594,6 +594,11 @@
 
 .browse-tooltip {
   animation: browseTooltipReveal 0.2s ease-out;
+  /* Allow wider tooltips for longer text */
+  max-width: 500px !important;
+  width: auto !important;
+  white-space: nowrap !important;
+  overflow: visible !important;
 }
 
 @keyframes browseTooltipReveal {
@@ -653,6 +658,7 @@
 /* Overlay fade in on activation */
 .browse-overlay {
   animation: browseOverlayFadeIn 0.3s ease-out;
+  overflow: visible !important;
 }
 
 @keyframes browseOverlayFadeIn {

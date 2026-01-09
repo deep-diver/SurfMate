@@ -167,37 +167,97 @@ async function handleAnalyzePage(message) {
         role: 'system',
         content: `You are a web page navigation assistant. Analyze the DOM snapshot and identify:
 
-1. CONTAINERS (semantic sections with multiple interactive elements)
-2. For EACH container, identify the TOP 5-8 most important elements inside it
-3. STANDALONE elements (important elements not in any container)
+1. CONTAINERS (semantic sections with multiple interactive elements) - Return the container selector and label ONLY
+2. STANDALONE elements (important elements not in any container) - For elements that don't belong in any container
+
+*** IMPORTANT ***
+- For CONTAINERS: Only return the container selector, label, and type. DO NOT include elements inside containers.
+- Elements inside containers will be detected dynamically when the user enters the container.
+- This is important because container contents often change dynamically (especially in SPAs).
+
+${domSnapshot.isGradio ? `
+*** GRADIO APP DETECTED ***
+This is a Gradio/ML application. Pay special attention to:
+- Gradio components: inputs (textbox, dropdown, slider, checkbox, radio, file upload)
+- Submit/Generate/Run buttons (highest priority!)
+- Output areas: galleries, chatbots, dataframes, markdown
+- Grouped components in tabs, accordions, or rows/columns
+
+For Gradio apps:
+- Group related components (e.g., all inputs in one section)
+- Submit/Clear buttons are always important
+- Output areas (chatbot, gallery, dataframe) are important containers
+` : ''}
+
+*** CRITICAL - ORDER BY WORKFLOW IMPORTANCE ***
+The ORDER of containers in your response determines their keyboard shortcut numbers (1-9).
+Return containers in the LOGICAL ORDER a user should interact with them:
+- First: Input/entry points (search box, prompt input, forms)
+- Second: Primary actions (submit, generate, run, search buttons)
+- Third: Results/outputs (results, gallery, output display)
+- Fourth: Secondary actions (settings, filters, options)
+- Last: Navigation and utility items
+
+${domSnapshot.isGradio ? `
+Gradio workflow ordering example:
+1. Prompt/Model input area
+2. Submit/Generate button
+3. Output gallery/chatbot
+4. Settings/Advanced options
+` : ''}
 
 BE VERY SELECTIVE - Quality over quantity:
-- Maximum 20 containers total
-- Maximum 3-5 standalone elements
-- Maximum 8 elements per container
-- Skip: decorative elements, footers, social links, cookie notices
+- Find ALL meaningful containers on the page (no limit)
+- Focus on sections with actual interactive content (buttons, links, forms)
+- Maximum 5 standalone elements
+- Skip: decorative elements, footers, social links, cookie notices, empty containers
 
-CRITICAL: Keep labels EXTREMELY SHORT and CONCISE:
-- Maximum 15-18 characters per label
-- Use 2-3 words maximum
-- Drop articles (the, a, an)
-- Use abbreviations when appropriate (e.g., "Search" not "Search box", "Nav" not "Navigation")
-- Examples: "Search", "Cart", "Login", "Menu", "Home", "Settings"
+*** CRITICAL - MEANINGFUL LABELS THAT ADD VALUE ***
+Your labels should provide CONTEXT and ACTIONABLE GUIDANCE, NOT just repeat visible text:
+- DO NOT just copy the button/input text - users can already see that!
+- INSTEAD: Describe the PURPOSE, ACTION, or OUTCOME
+- Use action verbs: "Enter...", "Generate...", "View...", "Adjust..."
+- Combine context with function for clarity
+
+${domSnapshot.isGradio ? `
+Gradio examples:
+❌ BAD: "Submit", "Prompt", "Output"
+✅ GOOD: "Generate image", "Enter your prompt", "View results"
+
+❌ BAD: "Model", "Settings", "Clear"
+✅ GOOD: "Choose AI model", "Adjust parameters", "Reset form"
+` : ''}
+
+General examples:
+❌ BAD: "Search", "Login", "Cart"
+✅ GOOD: "Find products", "Sign in", "View 3 items"
+
+❌ BAD: "Submit", "Save", "Cancel"
+✅ GOOD: "Post comment", "Save changes", "Go back"
+
+Keep labels SHORT (15-20 chars) but MEANINGFUL:
+- "Generate image" (not "Submit")
+- "Enter search terms" (not "Search box")
+- "View cart (3)" (not "Cart")
 
 CRITICAL - SELECTOR HANDLING:
-- For ELEMENTS inside containers and standalone elements: use the EXACT "selector" from the DOM snapshot
-- For CONTAINER selectors: Use elements where "isContainer": true when available
+- For CONTAINERS: Use elements where "isContainer": true from the DOM snapshot
   - Elements with "isContainer": true are actual container divs/navs/sections
   - Check if any isContainer element covers the region you want to make a container
   - If no isContainer element exists for a region, that's OK - just skip creating a container for that region
+- For STANDALONE ELEMENTS: use the EXACT "selector" from the DOM snapshot
 - NEVER use button/link/input selectors as container selectors - only use div/nav/section/header/main/footer elements
 - DO NOT generate completely new selectors - only use selectors that exist in the snapshot
+${domSnapshot.isGradio ? `
+- For Gradio: Use the exact selector from the snapshot, including those marked "isGradioComponent"
+- Gradio components often have nested structures - prefer the innermost actionable element
+` : ''}
 
-Return a JSON object with "containers" (each with selector, label, type, elements) and "standalone" arrays.`
+Return a JSON object with "containers" (each with selector, label, type) and "standalone" arrays.`
       },
       {
         role: 'user',
-        content: `Page URL: ${url}\nPage Title: ${title}\n\nDOM Snapshot:\n${JSON.stringify(domSnapshot, null, 2)}\n\nAnalyze this page and return containers with their elements, plus standalone elements. Use exact selectors from the snapshot for individual elements. Respond with JSON only.`
+        content: `Page URL: ${url}\nPage Title: ${title}\n${domSnapshot.isGradio ? '\n*** GRADIO APP *** This is a Gradio/ML application interface.\n' : ''}\n\nDOM Snapshot:\n${JSON.stringify(domSnapshot, null, 2)}\n\nAnalyze this page and return containers in WORKFLOW ORDER with MEANINGFUL, ACTION-ORIENTED labels that add value beyond visible text. Use exact selectors from the snapshot. Respond with JSON only.`
       }
     ],
     // Use max_tokens for Groq, max_completion_tokens for OpenAI
@@ -209,71 +269,8 @@ Return a JSON object with "containers" (each with selector, label, type, element
   if (provider === 'groq') {
     requestBody.response_format = { type: 'json_object' };
   } else {
-    requestBody.response_format = {
-      type: 'json_schema',
-      json_schema: {
-        name: 'navigation_structure',
-        strict: true,
-        schema: {
-          type: 'object',
-          properties: {
-            containers: {
-              type: 'array',
-              items: {
-                type: 'object',
-                properties: {
-                  selector: { type: 'string' },
-                  label: { type: 'string' },
-                  type: {
-                    type: 'string',
-                    enum: ['navigation', 'sidebar', 'form', 'grid', 'list', 'menu', 'card', 'section', 'other']
-                  },
-                  elements: {
-                    type: 'array',
-                    items: {
-                      type: 'object',
-                      properties: {
-                        selector: { type: 'string' },
-                        label: { type: 'string' },
-                        type: {
-                          type: 'string',
-                          enum: ['button', 'link', 'input', 'textarea', 'select']
-                        }
-                      },
-                      required: ['selector', 'label', 'type'],
-                      additionalProperties: false
-                    },
-                    maxItems: 8
-                  }
-                },
-                required: ['selector', 'label', 'type', 'elements'],
-                additionalProperties: false
-              },
-              maxItems: 20
-            },
-            standalone: {
-              type: 'array',
-              items: {
-                type: 'object',
-                properties: {
-                  selector: { type: 'string' },
-                  label: { type: 'string' },
-                  type: {
-                    type: 'string',
-                    enum: ['button', 'link', 'input', 'textarea', 'select']
-                  }
-                },
-                required: ['selector', 'label', 'type'],
-                additionalProperties: false
-              },
-              maxItems: 5
-            }
-          },
-          required: ['containers', 'standalone'],
-          additionalProperties: false
-        }
-      }
-    };
+    // Use json_object mode instead of strict json_schema for better compatibility
+    requestBody.response_format = { type: 'json_object' };
   }
 
   console.log('[Browse] Sending request to', apiEndpoint);
@@ -403,12 +400,33 @@ DO NOT skip elements unless they are:
 - Duplicate/repeated items (like "read more" links appearing 10+ times)
 - Social media sharing links
 
-CRITICAL: Keep labels EXTREMELY SHORT and CONCISE:
-- Maximum 12-15 characters per label
-- Use 1-2 words maximum
-- Drop articles (the, a, an)
-- Use abbreviations when appropriate
-- Examples: "Buy", "Edit", "Save", "Add", "Delete", "View", "Open"
+*** CRITICAL - ORDER BY WORKFLOW IMPORTANCE ***
+The ORDER of elements in your response determines their keyboard shortcut letters (a-z).
+Return elements in the LOGICAL ORDER a user should interact with them within this container:
+- First: Inputs and form fields
+- Second: Primary action buttons (submit, confirm, save)
+- Third: Secondary actions (cancel, delete, edit)
+- Last: Navigation and utility links
+
+*** CRITICAL - MEANINGFUL LABELS THAT ADD VALUE ***
+Your labels should provide CONTEXT and ACTIONABLE GUIDANCE, NOT just repeat visible text:
+- DO NOT just copy the button/input text - users can already see that!
+- INSTEAD: Describe the PURPOSE, ACTION, or OUTCOME
+- Use action verbs: "Enter...", "Click to...", "View...", "Adjust..."
+
+Examples:
+❌ BAD: "Submit", "Search", "Buy"
+✅ GOOD: "Post comment", "Find products", "Add to cart"
+
+❌ BAD: "Email", "Password", "Name"
+✅ GOOD: "Enter email", "Choose password", "Your full name"
+
+❌ BAD: "Edit", "Delete", "Cancel"
+✅ GOOD: "Modify item", "Remove item", "Go back"
+
+Keep labels SHORT (12-18 chars) but MEANINGFUL:
+- Focus on WHAT HAPPENS or WHAT TO DO
+- Include context when helpful
 
 CRITICAL - SELECTOR HANDLING:
 - Use the EXACT "selector" from the DOM snapshot for each element
@@ -428,7 +446,7 @@ Page Title: ${title}
 DOM Snapshot of this container:
 ${JSON.stringify(domSnapshot, null, 2)}
 
-Analyze this container and return the most important interactive elements. Use exact selectors from the snapshot. Respond with JSON only.`
+Analyze this container and return interactive elements in WORKFLOW ORDER with MEANINGFUL, ACTION-ORIENTED labels that add value beyond visible text. Use exact selectors from the snapshot. Respond with JSON only.`
       }
     ],
     ...(provider === 'groq' ? { max_tokens: 2000 } : { max_completion_tokens: 2000 }),
@@ -439,37 +457,8 @@ Analyze this container and return the most important interactive elements. Use e
   if (provider === 'groq') {
     requestBody.response_format = { type: 'json_object' };
   } else {
-    requestBody.response_format = {
-      type: 'json_schema',
-      json_schema: {
-        name: 'container_elements',
-        strict: true,
-        schema: {
-          type: 'object',
-          properties: {
-            elements: {
-              type: 'array',
-              items: {
-                type: 'object',
-                properties: {
-                  selector: { type: 'string' },
-                  label: { type: 'string' },
-                  type: {
-                    type: 'string',
-                    enum: ['button', 'link', 'input', 'textarea', 'select']
-                  }
-                },
-                required: ['selector', 'label', 'type'],
-                additionalProperties: false
-              },
-              maxItems: 20
-            }
-          },
-          required: ['elements'],
-          additionalProperties: false
-        }
-      }
-    };
+    // Use json_object mode instead of strict json_schema for better compatibility
+    requestBody.response_format = { type: 'json_object' };
   }
 
   console.log('[Browse] Sending container analysis request to', apiEndpoint);

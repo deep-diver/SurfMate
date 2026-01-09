@@ -1,5 +1,69 @@
 // Browse - AI-Powered Navigation (Pro Version)
 
+// Gradio detection and helpers
+function isGradioApp() {
+  // Check for Gradio container or other Gradio-specific markers
+  return !!(
+    document.querySelector('.gradio-container') ||
+    document.querySelector('[class*="gradio"]') ||
+    document.querySelector('#gradio-app')
+  );
+}
+
+function getGradioVersion() {
+  // Try to detect Gradio version from meta tags or script tags
+  const gradioScript = document.querySelector('script[src*="gradio"]');
+  if (gradioScript) {
+    const match = gradioScript.src.match(/gradio.*?(\d+\.\d+\.\d+)/);
+    return match ? match[1] : 'unknown';
+  }
+  return 'unknown';
+}
+
+// Gradio-specific container selectors
+const GRADIO_CONTAINER_SELECTORS = [
+  // Main layout components
+  '.gradio-container',
+  '[class*="gradio-row"]',
+  '[class*="gradio-column"]',
+  '[class*="gradio-group"]',
+  '[class*="gradio-tabs"]',
+  '[class*="gradio-accordion"]',
+  '[class*="gradio-box"]',
+  '[class*="gradio-block"]',
+  // Form components (treat as containers if they have labels)
+  '[class*="gradio-textbox"]',
+  '[class*="gradio-dropdown"]',
+  '[class*="gradio-radio"]',
+  '[class*="gradio-checkbox"]',
+  '[class*="gradio-slider"]',
+  '[class*="gradio-image"]',
+  '[class*="gradio-video"]',
+  '[class*="gradio-audio"]',
+  '[class*="gradio-file"]',
+  '[class*="gradio-gallery"]',
+  '[class*="gradio-dataframe"]',
+  '[class*="gradio-chatbot"]',
+  '[class*="gradio-markdown"]',
+];
+
+// Gradio component priorities (for better element detection)
+const GRADIO_COMPONENT_PRIORITIES = {
+  'gradio-button': 1100,
+  'gradio-submit-button': 1150,
+  'gradio-clear-button': 1050,
+  'gradio-textbox': 900,
+  'gradio-textarea': 890,
+  'gradio-dropdown': 880,
+  'gradio-radio': 870,
+  'gradio-checkbox': 860,
+  'gradio-slider': 850,
+  'gradio-file': 840,
+  'gradio-gallery': 700,
+  'gradio-chatbot': 700,
+  'gradio-dataframe': 650,
+};
+
 // State
 const state = {
   active: false,
@@ -25,7 +89,10 @@ const state = {
   // Recently interacted elements (for highlights)
   recentElements: new Set(),
   // Tooltip element
-  activeTooltip: null
+  activeTooltip: null,
+  // Gradio detection
+  isGradio: false,
+  gradioVersion: 'unknown'
 };
 
 // Resize debounce timeout
@@ -38,6 +105,10 @@ let scrollPending = false;
 // Constants
 const NUMBERS = '123456789';
 const LETTERS = 'abcdefghijklmnopqrstuvwxyz';
+// Extended keys for more elements (case-insensitive in practice, but we check both)
+const EXTENDED_KEYS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'; // Will require Shift key
+// Combined all available single-key shortcuts (total 61)
+const ALL_KEYS = NUMBERS + LETTERS + EXTENDED_KEYS;
 const MODES = {
   NORMAL: 'normal',
   FOLLOW: 'follow',
@@ -297,7 +368,8 @@ function handleKeyDown(e) {
   if (!e.ctrlKey && !e.metaKey && !e.altKey) {
     const key = e.key.toLowerCase();
 
-    if (NUMBERS.includes(key) || LETTERS.includes(key)) {
+    // Check if key is one of our mapped shortcuts
+    if (ALL_KEYS.toLowerCase().includes(key)) {
       e.preventDefault();
 
       if (state.keyToElement.has(key)) {
@@ -682,6 +754,14 @@ async function activate() {
   state.active = true;
   state.navigationLevel = 'containers';
   state.currentContainer = null;
+
+  // Detect if this is a Gradio app
+  state.isGradio = isGradioApp();
+  state.gradioVersion = getGradioVersion();
+  if (state.isGradio) {
+    console.log('[Browse] Gradio app detected! Version:', state.gradioVersion);
+  }
+
   createOverlay();
 
   // Show animated loading progress
@@ -731,7 +811,7 @@ async function activate() {
 
     renderContainers();
     const total = state.containers.length + state.standalone.length;
-    showHUD(`${state.containers.length} containers • 1-9: select • ?: help`);
+    showHUD(`${state.containers.length} containers (1→9 workflow order) • 1-9: select • ?: help`);
   } catch (error) {
     hideLoadingProgress();
     showError(error.message);
@@ -863,14 +943,22 @@ function showLoadingProgress() {
   loadingProgressStep = 0;
   let progressPercent = 0;
   loadingInterval = setInterval(() => {
+    // Check if element still exists (may have been removed)
+    if (!loadingProgressElement) {
+      clearInterval(loadingInterval);
+      return;
+    }
+
     // Update message
     loadingProgressStep = (loadingProgressStep + 1) % loadingMessages.length;
     const textEl = loadingProgressElement.querySelector('.browse-loading-text');
     if (textEl) {
       textEl.style.opacity = '0';
       setTimeout(() => {
-        textEl.textContent = loadingMessages[loadingProgressStep];
-        textEl.style.opacity = '1';
+        if (loadingProgressElement) {
+          textEl.textContent = loadingMessages[loadingProgressStep];
+          textEl.style.opacity = '1';
+        }
       }, 200);
     }
 
@@ -983,7 +1071,7 @@ async function reloadFullPage() {
 
     renderContainers();
     const total = state.containers.length + state.standalone.length;
-    showHUD(`Reloaded: ${state.containers.length} containers • 1-9: select`);
+    showHUD(`Reloaded: ${state.containers.length} containers (1→9 workflow order) • 1-9: select`);
   } catch (error) {
     hideLoadingProgress();
     showError(error.message);
@@ -1003,7 +1091,7 @@ async function reloadContainer() {
   // Re-render with new elements
   renderContainerElements(container);
 
-  showHUD(`Found ${state.currentElements.length} elements in ${container.label} • ESC: back`);
+  showHUD(`${state.currentElements.length} elements (a→z workflow order) • ESC: back`);
 }
 
 // Render containers (Level 1)
@@ -1016,21 +1104,20 @@ function renderContainers() {
   // Filter out fake containers (AI sometimes identifies single elements as containers)
   // A real container should have multiple elements OR be a known semantic section
   const validContainers = state.containers.filter(container => {
-    // If it has pre-analyzed elements, it's valid
-    if (container.elements && container.elements.length > 0) {
-      return true;
-    }
-
     // Check if the container actually contains multiple interactive elements
     const containerEl = queryElementSafe(container.selector);
-    if (!containerEl) return false;
+    if (!containerEl) {
+      console.log('[Browse] Filtered container with invalid selector:', container.label);
+      return false;
+    }
 
     // Count interactive elements within
     const interactiveCount = containerEl.querySelectorAll(
       'a[href], button, input, textarea, select, [onclick], [tabindex], [role="button"], [role="link"]'
     ).length;
 
-    const isValid = interactiveCount >= 3; // Must have at least 3 interactive elements
+    // Must have at least 2 interactive elements to be considered a valid container
+    const isValid = interactiveCount >= 2;
 
     if (!isValid) {
       console.log('[Browse] Filtered fake container:', container.label, 'only had', interactiveCount, 'elements');
@@ -1060,6 +1147,12 @@ function showContainerHint(container, key) {
 
   const rect = element.getBoundingClientRect();
   const label = container.label || 'Container';
+
+  // Calculate visibility factor to determine badge size
+  const visibility = getVisibilityFactor(element);
+  const isOffScreen = visibility < 0.3; // Less than 30% visible
+  const sizeScale = isOffScreen ? 0.7 : 1.0; // 30% smaller for off-screen elements
+  const opacity = isOffScreen ? 0.6 : 1.0; // More transparent for off-screen
 
   // Cute pastel color palette 🌸✨🌈
   const cuteColors = [
@@ -1126,10 +1219,15 @@ function showContainerHint(container, key) {
   state.overlay.appendChild(border);
 
   // Smart positioning for badge with flexible label width
-  const badgeWidth = 55;
-  const badgeHeight = 55;
+  const baseBadgeWidth = 55;
+  const baseBadgeHeight = 55;
+
+  // Apply size scale based on visibility (30% smaller for off-screen)
+  const badgeWidth = baseBadgeWidth * sizeScale;
+  const badgeHeight = baseBadgeHeight * sizeScale;
+
   // Calculate more accurate label width (approximate 8px per character + padding)
-  const labelWidth = Math.max(80, Math.min(200, Math.ceil(label.length * 8.5) + 30));
+  const labelWidth = Math.max(80, Math.min(400, Math.ceil(label.length * 9) + 40)) * sizeScale;
   const totalWidth = badgeWidth + labelWidth + 15;
 
   // Position preferences
@@ -1196,6 +1294,7 @@ function showContainerHint(container, key) {
       pointer-events: none;
       z-index: 2147483647;
       overflow: visible;
+      transition: opacity 0.3s ease;
     ">
       <!-- Cute hand-drawn circle with soft glow -->
       <defs>
@@ -1207,33 +1306,33 @@ function showContainerHint(container, key) {
           </feMerge>
         </filter>
       </defs>
-      <circle cx="${badgeWidth / 2}" cy="${badgeHeight / 2}" r="22"
-        fill="${colors.primary}" stroke="#fff" stroke-width="3" filter="url(#glow${key})" opacity="0.95" />
+      <circle cx="${badgeWidth / 2}" cy="${badgeHeight / 2}" r="${22 * sizeScale}"
+        fill="${colors.primary}" stroke="#fff" stroke-width="${3 * sizeScale}" filter="url(#glow${key})" opacity="${0.95 * opacity}" />
       <!-- Inner decoration ring -->
-      <circle cx="${badgeWidth / 2}" cy="${badgeHeight / 2}" r="26"
-        fill="none" stroke="${colors.secondary}" stroke-width="1.5" opacity="0.5"
+      <circle cx="${badgeWidth / 2}" cy="${badgeHeight / 2}" r="${26 * sizeScale}"
+        fill="none" stroke="${colors.secondary}" stroke-width="${1.5 * sizeScale}" opacity="${0.5 * opacity}"
         stroke-dasharray="3,4" />
 
       <!-- Cute key number with soft shadow -->
       <text x="${badgeWidth / 2}" y="${badgeHeight / 2 + 2}"
         text-anchor="middle" dominant-baseline="middle"
         font-family="'Comic Sans MS', 'Chalkboard SE', 'Varela Round', cursive, sans-serif"
-        font-size="28" font-weight="bold" fill="#fff" style="text-shadow: 2px 2px 6px rgba(0,0,0,0.2);">${key}</text>
+        font-size="${28 * sizeScale}" font-weight="bold" fill="#fff" style="text-shadow: 2px 2px 6px rgba(0,0,0,0.2);">${key}</text>
 
       <!-- Cute arrow with softer look -->
       <path d="${arrowPath}" fill="none" stroke="${colors.secondary}"
-        stroke-width="5" stroke-linecap="round" stroke-linejoin="round" opacity="0.85" />
+        stroke-width="${5 * sizeScale}" stroke-linecap="round" stroke-linejoin="round" opacity="${0.85 * opacity}" />
       <path d="${arrowPath}" fill="none" stroke="${colors.primary}"
-        stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+        stroke-width="${2.5 * sizeScale}" stroke-linecap="round" stroke-linejoin="round" />
 
       <!-- Cute label bubble with rounded corners - dark background for contrast -->
-      <rect x="${badgeWidth + 12}" y="${(badgeHeight - 32) / 2}" width="${labelWidth}" height="32" rx="10" ry="10"
-        fill="rgba(30, 30, 45, 0.95)" stroke="${colors.primary}" stroke-width="2.5" />
+      <rect x="${badgeWidth + 12}" y="${(badgeHeight - 32 * sizeScale) / 2}" width="${labelWidth}" height="${32 * sizeScale}" rx="${10 * sizeScale}" ry="${10 * sizeScale}"
+        fill="rgba(30, 30, 45, ${0.95 * opacity})" stroke="${colors.primary}" stroke-width="${2.5 * sizeScale}" />
       <text x="${badgeWidth + 12 + labelWidth / 2}" y="${badgeHeight / 2 + 1}"
         text-anchor="middle" dominant-baseline="middle"
         font-family="'Comic Sans MS', 'Chalkboard SE', 'Varela Round', cursive, sans-serif"
-        font-size="14" font-weight="600" fill="#ffffff"
-        style="text-shadow: 0 0 8px rgba(0,0,0,0.5);">${escapeHtml(label).substring(0, 16)}</text>
+        font-size="${14 * sizeScale}" font-weight="600" fill="#ffffff"
+        style="text-shadow: 0 0 8px rgba(0,0,0,0.5);">${escapeHtml(label)}</text>
     </svg>
   `;
 
@@ -1376,6 +1475,23 @@ function enterContainer(container) {
   state.currentContainer = container;
   state.navigationLevel = 'elements';
 
+  // Scroll container into view if it's not visible
+  const containerEl = queryElementSafe(container.selector);
+  if (containerEl) {
+    const rect = containerEl.getBoundingClientRect();
+    const isVisible = (
+      rect.top >= 0 &&
+      rect.top < window.innerHeight &&
+      rect.left >= 0 &&
+      rect.left < window.innerWidth
+    );
+
+    if (!isVisible) {
+      console.log('[Browse] Container not visible, scrolling into view:', container.label);
+      containerEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }
+
   // Remove dim overlay with fade out
   const dimOverlay = state.overlay?.querySelector('.browse-dim-overlay');
   if (dimOverlay) {
@@ -1500,7 +1616,7 @@ function findInteractiveElementsInContainer(container) {
 function generateSimpleSelector(element, container) {
   // Try multiple strategies to create a working selector
 
-  // 1. If element has an ID, use it
+  // 1. If element has an ID, use it (most reliable)
   if (element.id) {
     return `#${element.id}`;
   }
@@ -1591,18 +1707,18 @@ function renderContainerElements(container) {
   console.log('[Browse] Vimium-style: Showing all', state.currentElements.length, 'elements');
 
   state.currentElements.forEach((element, i) => {
-    if (i >= NUMBERS.length + LETTERS.length) {
-      console.log('[Browse] Skipping element', i, '- ran out of shortcuts');
-      return; // We've used all available shortcuts (1-9, a-z)
+    if (i >= ALL_KEYS.length) {
+      console.log('[Browse] Skipping element', i, '- ran out of shortcuts (limit:', ALL_KEYS.length, ')');
+      return; // We've used all available shortcuts
     }
 
-    const key = i < NUMBERS.length ? NUMBERS[i] : LETTERS[i - NUMBERS.length];
-    state.keyToElement.set(key, { type: 'element', data: element });
-    showHintForElement(element, key, i < 9 ? 'number' : 'letter');
+    const key = ALL_KEYS[i];
+    state.keyToElement.set(key.toLowerCase(), { type: 'element', data: element }); // Store lowercase for case-insensitive matching
+    showHintForElement(element, key, i < NUMBERS.length ? 'number' : (i < NUMBERS.length + LETTERS.length ? 'letter' : 'extended'));
   });
 
   // Show context-aware mini HUD instead of bottom HUD
-  const visibleCount = Math.min(state.currentElements.length, NUMBERS.length + LETTERS.length);
+  const visibleCount = Math.min(state.currentElements.length, ALL_KEYS.length);
   showMiniHUD(container, visibleCount);
 }
 
@@ -1700,7 +1816,7 @@ function exitToContainers() {
   if (state.breadcrumbTrail.length > 0) {
     showBreadcrumbHUD();
   } else {
-    showHUD(`${state.containers.length} containers • 1-9: select • esc: back`);
+    showHUD(`${state.containers.length} containers (1→9 workflow order) • 1-9: select • esc: back`);
   }
 }
 
@@ -1710,7 +1826,9 @@ function generateDOMSnapshot() {
     url: window.location.href,
     title: document.title,
     timestamp: Date.now(),
-    elements: []
+    elements: [],
+    isGradio: state.isGradio,
+    gradioVersion: state.gradioVersion
   };
 
   // Element priorities (interactive elements)
@@ -1749,7 +1867,83 @@ function generateDOMSnapshot() {
     '[data-container]', '[data-section]', '[data-region]'
   ];
 
+  // Add Gradio-specific selectors if this is a Gradio app
+  if (state.isGradio) {
+    console.log('[Browse] Adding Gradio-specific container selectors');
+    // Prepend Gradio selectors for better priority
+    containerSelectors.unshift(...GRADIO_CONTAINER_SELECTORS);
+  }
+
   const elements = [];
+
+  // For Gradio apps, add specific component detection first
+  if (state.isGradio) {
+    console.log('[Browse] Collecting Gradio-specific components');
+
+    // Collect Gradio buttons (submit, clear, etc.)
+    try {
+      document.querySelectorAll('[class*="gradio-button"]').forEach(el => {
+        if (!isVisible(el)) return;
+
+        const rect = el.getBoundingClientRect();
+        const text = getElementText(el);
+
+        // Determine button type based on text
+        let btnType = 'gradio-button';
+        if (text.toLowerCase().includes('submit') || text.toLowerCase().includes('generate')) {
+          btnType = 'gradio-submit-button';
+        } else if (text.toLowerCase().includes('clear') || text.toLowerCase().includes('reset')) {
+          btnType = 'gradio-clear-button';
+        }
+
+        elements.push({
+          selector: generateSelector(el),
+          text: text.substring(0, 100),
+          tag: 'button',
+          priority: GRADIO_COMPONENT_PRIORITIES[btnType] || 1100,
+          attributes: {
+            className: el.className?.substring(0, 100),
+            text: text.substring(0, 50)
+          },
+          position: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
+          isGradioComponent: true
+        });
+      });
+    } catch (e) {}
+
+    // Collect Gradio form components (inputs, textareas, etc.)
+    try {
+      document.querySelectorAll('[class*="gradio-"]').forEach(el => {
+        if (!isVisible(el)) return;
+        const selector = generateSelector(el);
+        // Skip if already collected (avoid duplicates)
+        if (elements.some(e => e.selector === selector)) return;
+
+        const rect = el.getBoundingClientRect();
+        const text = getElementText(el);
+
+        // Find input/textarea/select within the component wrapper
+        const input = el.querySelector('input, textarea, select');
+
+        elements.push({
+          selector: input ? generateSelector(input) : selector,
+          text: text.substring(0, 100),
+          tag: input ? input.tagName.toLowerCase() : 'div',
+          priority: 900, // High priority for Gradio components
+          isContainer: !input, // Treat wrapper as container if no direct input
+          attributes: {
+            className: el.className?.substring(0, 100),
+            placeholder: input?.placeholder,
+            type: input?.type
+          },
+          position: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
+          isGradioComponent: true
+        });
+      });
+    } catch (e) {}
+
+    console.log('[Browse] Collected', elements.filter(e => e.isGradioComponent).length, 'Gradio components');
+  }
 
   // First, collect container elements with lower priority
   containerSelectors.forEach(selector => {
@@ -1858,7 +2052,7 @@ function generateDOMSnapshot() {
 
   // Sort and limit - collect many more candidates for AI to choose from
   elements.sort((a, b) => b.priority - a.priority);
-  snapshot.elements = elements.slice(0, 200); // Increased from 80 to get more containers
+  snapshot.elements = elements.slice(0, 500); // Increased to 500 to get more containers
 
   console.log('[Browse] Collected', elements.length, 'elements (', snapshot.elements.filter(e => e.isContainer).length, 'containers)');
 
@@ -1935,9 +2129,9 @@ function generateContainerSnapshot(container) {
     } catch (e) {}
   });
 
-  // Sort and limit (get up to 20 elements for the container)
+  // Sort and limit - get all elements for the container (no artificial limit)
   elements.sort((a, b) => b.priority - a.priority);
-  snapshot.elements = elements.slice(0, 20);
+  snapshot.elements = elements.slice(0, 200); // Increased from 20 to 200
 
   console.log('[Browse] Container snapshot generated with', snapshot.elements.length, 'elements');
 
@@ -2089,40 +2283,18 @@ function getSmartHintPosition(elementRect, hintSize = { width: 24, height: 24 })
   };
 
   const padding = 8; // Minimum padding from viewport edges
-  const hintMargin = 4; // Margin from element
+  const offset = 4; // Small offset from element edge
 
-  // Position candidates in order of preference
-  const positions = [
-    { x: elementRect.left + hintMargin, y: elementRect.top + hintMargin, name: 'top-left' },
-    { x: elementRect.right - hintSize.width - hintMargin, y: elementRect.top + hintMargin, name: 'top-right' },
-    { x: elementRect.left + hintMargin, y: elementRect.bottom - hintSize.height - hintMargin, name: 'bottom-left' },
-    { x: elementRect.right - hintSize.width - hintMargin, y: elementRect.bottom - hintSize.height - hintMargin, name: 'bottom-right' },
-    { x: elementRect.left + (elementRect.width - hintSize.width) / 2, y: elementRect.top - hintSize.height - hintMargin, name: 'top-center-outside' },
-    { x: elementRect.left + (elementRect.width - hintSize.width) / 2, y: elementRect.bottom + hintMargin, name: 'bottom-center-outside' },
-    { x: elementRect.left + hintMargin, y: elementRect.top + (elementRect.height - hintSize.height) / 2, name: 'left-center-inside' },
-    { x: elementRect.right - hintSize.width - hintMargin, y: elementRect.top + (elementRect.height - hintSize.height) / 2, name: 'right-center-inside' }
-  ];
+  // Consistent positioning: always place hint at top-left of element
+  // This makes it predictable and reduces overlaps
+  let x = elementRect.left + offset;
+  let y = elementRect.top + offset;
 
-  // Try each position and pick the first one that's fully visible
-  for (const pos of positions) {
-    const isVisible = (
-      pos.x >= padding &&
-      pos.y >= padding &&
-      pos.x + hintSize.width <= viewport.width - padding &&
-      pos.y + hintSize.height <= viewport.height - padding
-    );
+  // Clamp to viewport boundaries
+  x = Math.max(padding, Math.min(x, viewport.width - hintSize.width - padding));
+  y = Math.max(padding, Math.min(y, viewport.height - hintSize.height - padding));
 
-    if (isVisible) {
-      return pos;
-    }
-  }
-
-  // Fallback: center of viewport if nothing works (rare)
-  return {
-    x: Math.max(padding, Math.min(elementRect.left, viewport.width - hintSize.width - padding)),
-    y: Math.max(padding, Math.min(elementRect.top, viewport.height - hintSize.height - padding)),
-    name: 'fallback'
-  };
+  return { x, y, name: 'top-left' };
 }
 
 // Show hint for element
@@ -2148,6 +2320,12 @@ function showHintForElement(annotation, key, type = 'auto') {
   const rect = element.getBoundingClientRect();
   const isNumber = NUMBERS.includes(key);
 
+  // Calculate visibility factor to determine hint size
+  const visibility = getVisibilityFactor(element);
+  const isOffScreen = visibility < 0.3; // Less than 30% visible
+  const sizeScale = isOffScreen ? 0.7 : 1.0; // 30% smaller for off-screen elements
+  const elementOpacity = isOffScreen ? 0.6 : 1.0; // More transparent for off-screen
+
   // Determine element importance and action type
   const importance = getElementImportance(annotation, element);
   const actionType = getActionType(annotation, element);
@@ -2158,7 +2336,7 @@ function showHintForElement(annotation, key, type = 'auto') {
   const animation = getAnimationForImportance(importance);
 
   // Estimate hint size for positioning
-  const hintSize = isNumber ? { width: 20, height: 20 } : { width: 24, height: 24 };
+  const hintSize = isNumber ? { width: 20 * sizeScale, height: 20 * sizeScale } : { width: 24 * sizeScale, height: 24 * sizeScale };
 
   // Calculate smart position
   const position = getSmartHintPosition(rect, hintSize);
@@ -2186,6 +2364,7 @@ function showHintForElement(annotation, key, type = 'auto') {
   // Apply styles based on importance and type
   const hintInner = hint.querySelector('span');
   hintInner.style.cssText = `
+    display: inline-block;
     background: ${color};
     color: #000;
     padding: ${size.padding};
@@ -2193,9 +2372,16 @@ function showHintForElement(annotation, key, type = 'auto') {
     font-family: 'SF Mono', Monaco, 'Consolas', monospace;
     font-weight: ${size.fontWeight};
     font-size: ${size.fontSize};
+    transform: scale(${sizeScale});
+    transform-origin: center center;
+    opacity: ${elementOpacity};
     box-shadow: 0 ${importance === 'high' ? '4' : '2'}px ${importance === 'high' ? '12' : '8'}px rgba(0, 0, 0, 0.${importance === 'high' ? '4' : '3'});
     border: 1px solid rgba(255, 255, 255, 0.${importance === 'high' ? '7' : '5'});
     ${importance === 'high' ? 'animation: browsePulse 2s ease-in-out infinite;' : ''}
+    min-width: ${20 * sizeScale}px;
+    text-align: center;
+    line-height: 1;
+    transition: transform 0.3s ease, opacity 0.3s ease;
   `;
 
   state.overlay.appendChild(hint);
@@ -2217,7 +2403,8 @@ function showHintForElement(annotation, key, type = 'auto') {
     box-sizing: border-box;
     pointer-events: none;
     z-index: 2147483646;
-    opacity: 0.5;
+    opacity: ${0.5 * elementOpacity};
+    transition: opacity 0.3s ease;
   `;
 
   state.overlay.appendChild(border);
@@ -2342,6 +2529,7 @@ function createOverlay() {
     height: 100%;
     pointer-events: none;
     z-index: 2147483647;
+    overflow: visible;
   `;
 
   document.body.appendChild(state.overlay);
@@ -2396,6 +2584,7 @@ function showMiniHUD(container, elementCount) {
       <div class="browse-mini-hud-keys">
         <span class="browse-key-hint">1-9</span>
         <span class="browse-key-hint">a-z</span>
+        <span class="browse-key-hint">A-Z</span>
       </div>
       <div class="browse-mini-hud-esc">ESC to go back</div>
     </div>
@@ -2473,16 +2662,22 @@ function showTooltip(element, annotation) {
     background: ${COLORS.bg};
     border: 1px solid ${COLORS.border};
     border-radius: 8px;
-    padding: 8px 12px;
+    padding: 10px 16px;
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
     z-index: 2147483649;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     font-size: 13px;
+    font-weight: 500;
     color: ${COLORS.text};
     white-space: nowrap;
+    text-align: center;
+    width: auto;
+    min-width: 80px;
+    max-width: 400px;
     pointer-events: none;
     opacity: 0;
     transition: opacity 0.2s ease;
+    overflow: visible;
   `;
 
   tooltip.textContent = annotation.label || 'Element';
@@ -2928,6 +3123,204 @@ function isVisible(el) {
 function isInViewport(el) {
   const rect = el.getBoundingClientRect();
   return rect.top >= -100 && rect.top <= window.innerHeight + 100;
+}
+
+// Check if element is fully or mostly visible (for sizing annotations)
+function getVisibilityFactor(el) {
+  const rect = el.getBoundingClientRect();
+  const viewportHeight = window.innerHeight;
+  const viewportWidth = window.innerWidth;
+
+  // Calculate how much of the element is visible
+  const visibleTop = Math.max(0, rect.top);
+  const visibleBottom = Math.min(viewportHeight, rect.bottom);
+  const visibleLeft = Math.max(0, rect.left);
+  const visibleRight = Math.min(viewportWidth, rect.right);
+
+  const visibleHeight = Math.max(0, visibleBottom - visibleTop);
+  const visibleWidth = Math.max(0, visibleRight - visibleLeft);
+
+  const visibleArea = visibleHeight * visibleWidth;
+  const totalArea = rect.height * rect.width;
+
+  // Return visibility factor (0 to 1)
+  if (totalArea === 0) return 0;
+  return Math.min(1, visibleArea / totalArea);
+}
+
+// ========== Overlap Detection and Resolution System ==========
+
+// Get bounding box of an annotation element (hint or badge)
+function getAnnotationBoundingBox(annotationEl) {
+  if (!annotationEl) return null;
+  const rect = annotationEl.getBoundingClientRect();
+  return {
+    left: rect.left,
+    top: rect.top,
+    right: rect.right,
+    bottom: rect.bottom,
+    width: rect.width,
+    height: rect.height,
+    centerX: rect.left + rect.width / 2,
+    centerY: rect.top + rect.height / 2,
+    element: annotationEl
+  };
+}
+
+// Check if two bounding boxes overlap
+function boxesOverlap(box1, box2, padding = 5) {
+  // Add padding to create a buffer zone
+  const b1 = {
+    left: box1.left - padding,
+    top: box1.top - padding,
+    right: box1.right + padding,
+    bottom: box1.bottom + padding
+  };
+  const b2 = {
+    left: box2.left - padding,
+    top: box2.top - padding,
+    right: box2.right + padding,
+    bottom: box2.bottom + padding
+  };
+
+  return !(b1.right < b2.left || b1.left > b2.right || b1.bottom < b2.top || b1.top > b2.bottom);
+}
+
+// Calculate the distance between two box centers
+function boxDistance(box1, box2) {
+  const dx = box1.centerX - box2.centerX;
+  const dy = box1.centerY - box2.centerY;
+  return Math.sqrt(dx * dx + dy * dy);
+}
+
+// Apply force-directed algorithm to resolve overlaps
+function resolveAnnotationOverlaps(annotationBoxes, maxIterations = 10) {
+  if (annotationBoxes.length < 2) return annotationBoxes;
+
+  const padding = 5;
+  const repulsionStrength = 15;
+  const viewport = {
+    width: window.innerWidth,
+    height: window.innerHeight
+  };
+
+  // Force-directed layout iterations
+  for (let iteration = 0; iteration < maxIterations; iteration++) {
+    let hasOverlap = false;
+
+    // Check each pair of annotations
+    for (let i = 0; i < annotationBoxes.length; i++) {
+      for (let j = i + 1; j < annotationBoxes.length; j++) {
+        const box1 = annotationBoxes[i];
+        const box2 = annotationBoxes[j];
+
+        if (boxesOverlap(box1, box2, padding)) {
+          hasOverlap = true;
+
+          // Calculate repulsion direction
+          const dx = box1.centerX - box2.centerX;
+          const dy = box1.centerY - box2.centerY;
+          const distance = Math.sqrt(dx * dx + dy * dy) || 1; // Avoid division by zero
+
+          // Normalize direction
+          const dirX = dx / distance;
+          const dirY = dy / distance;
+
+          // Calculate overlap amount
+          const overlapX = (box1.width + box2.width) / 2 + padding - Math.abs(box1.centerX - box2.centerX);
+          const overlapY = (box1.height + box2.height) / 2 + padding - Math.abs(box1.centerY - box2.centerY);
+
+          // Apply repulsive force proportional to overlap
+          const force = Math.min(overlapX, overlapY) * repulsionStrength * 0.1;
+
+          // Move boxes apart (apply to element positions)
+          applyPositionDelta(box1.element, dirX * force, dirY * force);
+          applyPositionDelta(box2.element, -dirX * force, -dirY * force);
+
+          // Update bounding boxes for next iteration
+          const newBox1 = getAnnotationBoundingBox(box1.element);
+          const newBox2 = getAnnotationBoundingBox(box2.element);
+          if (newBox1) Object.assign(box1, newBox1);
+          if (newBox2) Object.assign(box2, newBox2);
+        }
+      }
+    }
+
+    // No overlaps found, we're done
+    if (!hasOverlap) break;
+  }
+
+  return annotationBoxes;
+}
+
+// Apply position delta to an annotation element
+function applyPositionDelta(element, deltaX, deltaY) {
+  if (!element) return;
+
+  const currentLeft = parseFloat(element.style.left) || 0;
+  const currentTop = parseFloat(element.style.top) || 0;
+
+  // Calculate new position
+  const newLeft = currentLeft + deltaX;
+  const newTop = currentTop + deltaY;
+
+  // Get element dimensions for clamping
+  const rect = element.getBoundingClientRect();
+  const viewport = {
+    width: window.innerWidth,
+    height: window.innerHeight
+  };
+  const padding = 8;
+
+  // Clamp to viewport boundaries
+  const clampedLeft = Math.max(padding, Math.min(newLeft, viewport.width - rect.width - padding));
+  const clampedTop = Math.max(padding, Math.min(newTop, viewport.height - rect.height - padding));
+
+  // Apply new position with transition
+  element.style.transition = 'left 0.2s ease-out, top 0.2s ease-out';
+  element.style.left = clampedLeft + 'px';
+  element.style.top = clampedTop + 'px';
+}
+
+// Collect all visible annotation bounding boxes from the overlay
+function collectAnnotationBoxes() {
+  const boxes = [];
+
+  if (!state.overlay) return boxes;
+
+  // Collect container badges
+  const containerBadges = state.overlay.querySelectorAll('.browse-container-badge');
+  containerBadges.forEach(badge => {
+    const box = getAnnotationBoundingBox(badge);
+    if (box) boxes.push(box);
+  });
+
+  // Collect element hints
+  const hints = state.overlay.querySelectorAll('.browse-hint');
+  hints.forEach(hint => {
+    const box = getAnnotationBoundingBox(hint);
+    if (box) boxes.push(box);
+  });
+
+  return boxes;
+}
+
+// Main function to resolve all annotation overlaps
+function resolveAllAnnotationOverlaps() {
+  const boxes = collectAnnotationBoxes();
+  if (boxes.length < 2) return;
+
+  console.log('[Browse] Resolving overlaps for', boxes.length, 'annotations');
+  resolveAnnotationOverlaps(boxes);
+
+  // Remove transitions after positioning is complete
+  setTimeout(() => {
+    boxes.forEach(box => {
+      if (box.element) {
+        box.element.style.transition = '';
+      }
+    });
+  }, 250);
 }
 
 function getElementText(el) {
