@@ -731,7 +731,7 @@ async function activate() {
 
     renderContainers();
     const total = state.containers.length + state.standalone.length;
-    showHUD(`${total} areas • 1-9: containers • ?: help`);
+    showHUD(`${state.containers.length} containers • 1-9: select • ?: help`);
   } catch (error) {
     hideLoadingProgress();
     showError(error.message);
@@ -983,7 +983,7 @@ async function reloadFullPage() {
 
     renderContainers();
     const total = state.containers.length + state.standalone.length;
-    showHUD(`Reloaded: ${total} areas • 1-9: containers`);
+    showHUD(`Reloaded: ${state.containers.length} containers • 1-9: select`);
   } catch (error) {
     hideLoadingProgress();
     showError(error.message);
@@ -1049,13 +1049,8 @@ function renderContainers() {
     showContainerHint(container, key);
   });
 
-  // Render standalone elements with letter hints
-  state.standalone.forEach((item, i) => {
-    if (i >= 26) return;
-    const key = LETTERS[i];
-    state.keyToElement.set(key, { type: 'standalone', data: item });
-    showHintForElement(item, key, 'letter');
-  });
+  // NOTE: Standalone elements are NOT shown at container level
+  // They are only accessible when inside a container (vimium-style navigation)
 }
 
 // Show container hint with cute doodle/sketch style
@@ -1705,7 +1700,7 @@ function exitToContainers() {
   if (state.breadcrumbTrail.length > 0) {
     showBreadcrumbHUD();
   } else {
-    showHUD(`${state.containers.length + state.standalone.length} areas • 1-9: containers`);
+    showHUD(`${state.containers.length} containers • 1-9: select • esc: back`);
   }
 }
 
@@ -1764,12 +1759,12 @@ function generateDOMSnapshot() {
 
         const rect = el.getBoundingClientRect();
 
-        // Only include if it contains multiple interactive elements
+        // Only include if it contains multiple interactive elements (relaxed from 2 to 1)
         const interactiveCount = el.querySelectorAll('button, a[href], input, textarea, select, [role="button"]').length;
-        if (interactiveCount < 2) return;
+        if (interactiveCount < 1) return; // Reduced from 2 to 1 to catch more containers
 
-        // Skip if too large (likely the whole page)
-        if (rect.width > window.innerWidth * 0.9 || rect.height > window.innerHeight * 0.8) return;
+        // Skip if too large (likely the whole page) - relaxed slightly
+        if (rect.width > window.innerWidth * 0.95 || rect.height > window.innerHeight * 0.85) return;
 
         elements.push({
           selector: generateSelector(el),
@@ -1800,13 +1795,13 @@ function generateDOMSnapshot() {
 
       const rect = el.getBoundingClientRect();
 
-      // Must contain multiple interactive elements
+      // Must contain multiple interactive elements (reduced from 3 to 2)
       const interactiveCount = el.querySelectorAll('button, a[href], input, textarea, select, [role="button"]').length;
-      if (interactiveCount < 3) return; // At least 3 interactive elements
+      if (interactiveCount < 2) return; // Reduced from 3 to 2 to catch more containers
 
-      // Skip if too small or too large
-      if (rect.width < 100 || rect.height < 50) return;
-      if (rect.width > window.innerWidth * 0.95 || rect.height > window.innerHeight * 0.9) return;
+      // Relaxed size constraints - allow smaller containers
+      if (rect.width < 60 || rect.height < 30) return; // Reduced from 100x50
+      if (rect.width > window.innerWidth * 0.98 || rect.height > window.innerHeight * 0.95) return; // Slightly relaxed
 
       // Skip if it's just a wrapper for a single element
       const children = el.children.length;
@@ -1861,9 +1856,11 @@ function generateDOMSnapshot() {
     } catch (e) {}
   });
 
-  // Sort and limit
+  // Sort and limit - collect many more candidates for AI to choose from
   elements.sort((a, b) => b.priority - a.priority);
-  snapshot.elements = elements.slice(0, 80);
+  snapshot.elements = elements.slice(0, 200); // Increased from 80 to get more containers
+
+  console.log('[Browse] Collected', elements.length, 'elements (', snapshot.elements.filter(e => e.isContainer).length, 'containers)');
 
   return snapshot;
 }

@@ -172,7 +172,7 @@ async function handleAnalyzePage(message) {
 3. STANDALONE elements (important elements not in any container)
 
 BE VERY SELECTIVE - Quality over quantity:
-- Maximum 6 containers total
+- Maximum 20 containers total
 - Maximum 3-5 standalone elements
 - Maximum 8 elements per container
 - Skip: decorative elements, footers, social links, cookie notices
@@ -249,7 +249,7 @@ Return a JSON object with "containers" (each with selector, label, type, element
                 required: ['selector', 'label', 'type', 'elements'],
                 additionalProperties: false
               },
-              maxItems: 6
+              maxItems: 20
             },
             standalone: {
               type: 'array',
