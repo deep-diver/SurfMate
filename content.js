@@ -1704,22 +1704,130 @@ function renderContainerElements(container) {
   }
 
   // VIMIUM-STYLE: Show ALL elements without filtering!
-  console.log('[Browse] Vimium-style: Showing all', state.currentElements.length, 'elements');
+  console.log('[Browse] Vimium-style: Rendering', state.currentElements.length, 'elements');
 
-  state.currentElements.forEach((element, i) => {
-    if (i >= ALL_KEYS.length) {
-      console.log('[Browse] Skipping element', i, '- ran out of shortcuts (limit:', ALL_KEYS.length, ')');
-      return; // We've used all available shortcuts
-    }
-
-    const key = ALL_KEYS[i];
-    state.keyToElement.set(key.toLowerCase(), { type: 'element', data: element }); // Store lowercase for case-insensitive matching
-    showHintForElement(element, key, i < NUMBERS.length ? 'number' : (i < NUMBERS.length + LETTERS.length ? 'letter' : 'extended'));
-  });
+  renderVimiumHintsUniversal(state.currentElements);
 
   // Show context-aware mini HUD instead of bottom HUD
   const visibleCount = Math.min(state.currentElements.length, ALL_KEYS.length);
   showMiniHUD(container, visibleCount);
+}
+
+// Universal vimium hints - works the same for ALL elements (no special cases)
+function renderVimiumHintsUniversal(elements) {
+  if (!state.overlay) return;
+
+  clearHints();
+  state.keyToElement.clear();
+
+  const HINT_SIZE = 26;
+
+  // Track selector usage to handle duplicate selectors
+  const selectorUsage = new Map();
+
+  // Collect valid elements
+  const validElements = [];
+  elements.forEach((element, i) => {
+    if (i >= ALL_KEYS.length) return;
+
+    // Track how many times we've used this selector
+    const usageCount = selectorUsage.get(element.selector) || 0;
+    selectorUsage.set(element.selector, usageCount + 1);
+
+    // Get all matching elements for this selector
+    const allMatches = document.querySelectorAll(element.selector);
+
+    if (allMatches.length === 0) return;
+
+    // Use the nth matching element based on usage count
+    const el = allMatches[Math.min(usageCount, allMatches.length - 1)];
+
+    const rect = el.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return;
+
+    validElements.push({
+      element,
+      rect,
+      key: ALL_KEYS[i],
+      index: i,
+      domElement: el
+    });
+  });
+
+  // Sort by visual position (reading order)
+  validElements.sort((a, b) => {
+    const rowDiff = a.rect.top - b.rect.top;
+    if (Math.abs(rowDiff) > 10) return rowDiff;
+    return a.rect.left - b.rect.left;
+  });
+
+  validElements.forEach((item) => {
+    const { element, rect, key, index, domElement } = item;
+
+    // Store the actual DOM element reference
+    element._element = domElement;
+
+    // Map key to element
+    state.keyToElement.set(key.toLowerCase(), { type: 'element', data: element });
+
+    const isNumber = NUMBERS.includes(key);
+    const isExtended = index >= NUMBERS.length + LETTERS.length;
+    const color = isNumber ? COLORS.primary : (isExtended ? COLORS.accent : COLORS.secondary);
+
+    // Place hint directly OVER the element (centered)
+    const hintX = rect.left + (rect.width - HINT_SIZE) / 2;
+    const hintY = rect.top + (rect.height - HINT_SIZE) / 2;
+
+    // Create hint badge (centered on element)
+    const hint = document.createElement('div');
+    hint.className = 'browse-vimium-hint';
+    hint.setAttribute('data-key', key);
+    hint.setAttribute('data-selector', element.selector);
+
+    hint.style.cssText = `
+      position: fixed;
+      left: ${hintX}px;
+      top: ${hintY}px;
+      width: ${HINT_SIZE}px;
+      height: ${HINT_SIZE}px;
+      background: ${color};
+      color: #000;
+      border-radius: 5px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'SF Mono', Monaco, 'Consolas', monospace;
+      font-weight: 700;
+      font-size: ${isNumber ? '12px' : '11px'};
+      z-index: 2147483647;
+      pointer-events: none;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+      border: 1px solid rgba(255, 255, 255, 0.9);
+    `;
+    hint.textContent = key;
+    state.overlay.appendChild(hint);
+
+    // Create EXACT bounding box (same position and size as element)
+    const border = document.createElement('div');
+    border.className = 'browse-element-border';
+    border.style.cssText = `
+      position: fixed;
+      left: ${rect.left}px;
+      top: ${rect.top}px;
+      width: ${rect.width}px;
+      height: ${rect.height}px;
+      border: 2px solid ${color};
+      border-radius: 0px;
+      box-sizing: border-box;
+      pointer-events: none;
+      z-index: 2147483646;
+      opacity: 1.0;
+      background: transparent;
+    `;
+    state.overlay.appendChild(border);
+  });
+
+  console.log('[Browse] Rendered', validElements.length, 'vimium hints (on target elements)');
 }
 
 // Filter out elements that are too close together (anti-crowding)
@@ -2414,7 +2522,7 @@ function showHintForElement(annotation, key, type = 'auto') {
 function clearHints() {
   if (!state.overlay) return;
 
-  state.overlay.querySelectorAll('.browse-hint, .browse-hint-border, .browse-container-border, .browse-container-badge, .browse-active-container').forEach(el => {
+  state.overlay.querySelectorAll('.browse-hint, .browse-hint-border, .browse-container-border, .browse-container-badge, .browse-active-container, .browse-vimium-hint, .browse-element-border').forEach(el => {
     el.remove();
   });
 }
