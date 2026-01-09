@@ -3,6 +3,7 @@ let currentApiKey = '';
 let currentProvider = 'openai';
 let currentModel = 'gpt-5.2';
 let extensionEnabled = false;
+let currentLanguage = 'en';
 
 // Provider and model configurations
 const PROVIDER_CONFIGS = {
@@ -37,6 +38,7 @@ const PROVIDER_CONFIGS = {
 // DOM Elements
 const providerSelect = document.getElementById('providerSelect');
 const modelSelect = document.getElementById('modelSelect');
+const languageSelect = document.getElementById('languageSelect');
 const apiKeyInput = document.getElementById('apiKeyInput');
 const toggleVisibility = document.getElementById('toggleVisibility');
 const extensionToggle = document.getElementById('extensionToggle');
@@ -59,16 +61,18 @@ function populateModels(provider) {
 // Initialize
 function init() {
   // Load saved settings
-  chrome.storage.local.get(['apiKey', 'provider', 'model', 'extensionEnabled'], (result) => {
+  chrome.storage.local.get(['apiKey', 'provider', 'model', 'extensionEnabled', 'language'], (result) => {
     currentApiKey = result.apiKey || '';
     currentProvider = result.provider || 'openai';
     currentModel = result.model || 'gpt-5.2';
     extensionEnabled = result.extensionEnabled ?? false;
+    currentLanguage = result.language || 'en';
 
     // Update UI
     providerSelect.value = currentProvider;
     populateModels(currentProvider);
     modelSelect.value = currentModel;
+    languageSelect.value = currentLanguage;
 
     if (currentApiKey) {
       apiKeyInput.value = currentApiKey;
@@ -133,6 +137,21 @@ function saveModel() {
   }, 300);
 }
 
+// Save language with debounce
+function saveLanguage() {
+  clearTimeout(saveTimeout);
+  saveTimeout = setTimeout(() => {
+    const newLanguage = languageSelect.value;
+    if (newLanguage !== currentLanguage) {
+      currentLanguage = newLanguage;
+      chrome.storage.local.set({ language: currentLanguage }, () => {
+        showSaveIndicator();
+        notifyContentScript();
+      });
+    }
+  }, 300);
+}
+
 // Toggle extension state
 function toggleExtension(enabled) {
   extensionEnabled = enabled;
@@ -190,6 +209,7 @@ toggleVisibility.addEventListener('click', () => {
 // Event listeners
 providerSelect.addEventListener('change', saveProvider);
 modelSelect.addEventListener('change', saveModel);
+languageSelect.addEventListener('change', saveLanguage);
 apiKeyInput.addEventListener('input', saveApiKey);
 extensionToggle.addEventListener('change', (e) => toggleExtension(e.target.checked));
 

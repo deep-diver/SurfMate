@@ -3,6 +3,7 @@ let extensionEnabled = false;
 let apiKey = '';
 let provider = 'openai';
 let model = 'gpt-5.2';
+let language = 'en';
 
 // Cache for analyzed pages
 const pageCache = new Map();
@@ -26,12 +27,13 @@ chrome.runtime.onInstalled.addListener(() => {
   console.log('Browse extension installed');
   keepServiceWorkerAlive();
   // Set default state
-  chrome.storage.local.get(['extensionEnabled', 'apiKey', 'provider', 'model'], (result) => {
+  chrome.storage.local.get(['extensionEnabled', 'apiKey', 'provider', 'model', 'language'], (result) => {
     extensionEnabled = result.extensionEnabled ?? false;
     apiKey = result.apiKey || '';
     provider = result.provider || 'openai';
     model = result.model || 'gpt-5.2';
-    console.log('[Browse] Initialized with provider:', provider, 'model:', model);
+    language = result.language || 'en';
+    console.log('[Browse] Initialized with provider:', provider, 'model:', model, 'language:', language);
   });
 });
 
@@ -60,6 +62,10 @@ chrome.storage.onChanged.addListener((changes, namespace) => {
     if (changes.model) {
       model = changes.model.newValue;
       console.log('[Browse] Model changed to:', model);
+    }
+    if (changes.language) {
+      language = changes.language.newValue;
+      console.log('[Browse] Language changed to:', language);
     }
   }
 });
@@ -187,6 +193,20 @@ For Gradio apps:
 - Group related components (e.g., all inputs in one section)
 - Submit/Clear buttons are always important
 - Output areas (chatbot, gallery, dataframe) are important containers
+` : ''}
+
+*** LANGUAGE ***
+${language === 'ko' ? `
+ALL labels and descriptions MUST be in Korean (한국어).
+- Use natural Korean phrases for labels
+- Examples:
+  ❌ BAD: "Search", "Submit", "Login"
+  ✅ GOOD: "검색", "제출", "로그인"
+  ✅ GOOD: "상품 검색", "게시글 등록", "로그인하기"
+- Keep labels SHORT (10-15 Korean characters) but MEANINGFUL
+` : language === 'en' ? `
+ALL labels and descriptions MUST be in English.
+- Use natural English phrases for labels
 ` : ''}
 
 *** CRITICAL - ORDER BY WORKFLOW IMPORTANCE ***
@@ -399,6 +419,20 @@ DO NOT skip elements unless they are:
 - Purely decorative (icons without actions)
 - Duplicate/repeated items (like "read more" links appearing 10+ times)
 - Social media sharing links
+
+*** LANGUAGE ***
+${language === 'ko' ? `
+ALL labels MUST be in Korean (한국어).
+- Use natural Korean action verbs
+- Examples:
+  ❌ BAD: "Submit", "Search", "Save"
+  ✅ GOOD: "제출", "검색", "저장"
+  ✅ GOOD: "댓글 작성", "상품 검색", "변경사항 저장"
+- Keep labels SHORT (8-12 Korean characters)
+` : language === 'en' ? `
+ALL labels MUST be in English.
+- Use natural English action verbs
+` : ''}
 
 *** CRITICAL - ORDER BY WORKFLOW IMPORTANCE ***
 The ORDER of elements in your response determines their keyboard shortcut letters (a-z).

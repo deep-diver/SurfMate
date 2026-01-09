@@ -641,13 +641,28 @@
 
 @keyframes browseSparkle {
   0% {
-    box-shadow: 0 0 0 0 rgba(255, 215, 0, 0.8);
+    opacity: 0;
+    transform: scale(0);
   }
   50% {
-    box-shadow: 0 0 20px 5px rgba(255, 215, 0, 0.4);
+    opacity: 1;
+    transform: scale(1);
   }
   100% {
-    box-shadow: 0 0 0 0 rgba(255, 215, 0, 0);
+    opacity: 0;
+    transform: scale(0);
+  }
+}
+
+/* Sparkle animation for background stars */
+@keyframes sparkle {
+  0%, 100% {
+    opacity: 0;
+    transform: scale(0);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1);
   }
 }
 

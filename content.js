@@ -115,14 +115,14 @@ const MODES = {
   COMMAND: 'command'
 };
 
-// Color scheme (professional, minimal)
+// Color scheme (gorgeous neon doodle-style)
 const COLORS = {
-  primary: '#00E676',      // Bright green for top elements
-  secondary: '#FFEB3B',    // Yellow for secondary
-  accent: '#FF4081',       // Pink for special
-  muted: '#B0BEC5',        // Gray for inactive
-  bg: 'rgba(0, 0, 0, 0.85)',
-  border: 'rgba(255, 255, 255, 0.3)',
+  primary: '#22CC66',      // Clear green
+  secondary: '#DDDD00',    // Clear yellow
+  accent: '#CC33BB',       // Clear magenta
+  muted: '#DD6633',        // Clear orange for inactive
+  bg: 'rgba(8, 8, 12, 0.88)',   // Deep rich black-blue
+  border: 'rgba(255, 255, 255, 0.6)',
   text: '#ffffff'
 };
 
@@ -1154,17 +1154,17 @@ function showContainerHint(container, key) {
 
   // Cute pastel color palette 🌸✨🌈
   const cuteColors = [
-    { primary: '#FFB3BA', secondary: '#FFDFBA', sparkle: '#FFD700' }, // Soft pink + peach
-    { primary: '#BAFFC9', secondary: '#FFFFBA', sparkle: '#FF6B9D' }, // Mint + yellow
-    { primary: '#E0BBE4', secondary: '#957DAD', sparkle: '#FFD93D' }, // Lavender + purple
-    { primary: '#BFEFFF', secondary: '#B2F7EF', sparkle: '#FF6BCB' }, // Sky blue + cyan
-    { primary: '#FFDAC1', secondary: '#E2F0CB', sparkle: '#FF9CEE' }, // Peach + lime
-    { primary: '#C7CEEA', secondary: '#B8E0D2', sparkle: '#FFB6D9' }, // Periwinkle + mint
+    { primary: '#DD7777', secondary: '#DDAA77', sparkle: '#CC8844' }, // Soft pink + peach
+    { primary: '#77DD88', secondary: '#DDDD77', sparkle: '#CC4477' }, // Mint + yellow
+    { primary: '#BB77DD', secondary: '#9966BB', sparkle: '#DD7744' }, // Lavender + purple
+    { primary: '#77DDEE', secondary: '#77DDAA', sparkle: '#DD4488' }, // Sky blue + cyan
+    { primary: '#DDAA88', secondary: '#BBDD88', sparkle: '#DD6699' }, // Peach + lime
+    { primary: '#AA88DD', secondary: '#88DDAA', sparkle: '#DD8888' }, // Periwinkle + mint
   ];
   const colorIndex = parseInt(key) - 1;
   const colors = cuteColors[colorIndex % cuteColors.length];
 
-  // Create dimmed background overlay (first time only)
+  // Create gorgeous dimmed background overlay (first time only)
   if (!state.overlay.querySelector('.browse-dim-overlay')) {
     const dimOverlay = document.createElement('div');
     dimOverlay.className = 'browse-dim-overlay';
@@ -1174,12 +1174,55 @@ function showContainerHint(container, key) {
       left: 0;
       width: 100vw;
       height: 100vh;
-      background: rgba(0, 0, 0, 0.3);
+      background: rgba(8, 8, 12, 0.4);
+      backdrop-filter: blur(3px) saturate(1.1);
       z-index: 2147483640;
       pointer-events: none;
-      animation: browseDimIn 0.4s ease-out;
+      animation: browseDimIn 0.5s ease-out;
     `;
+
+    // Add sparkle stars
+    const sparkleContainer = document.createElement('div');
+    sparkleContainer.className = 'browse-sparkles';
+    sparkleContainer.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      pointer-events: none;
+      z-index: 2147483641;
+      overflow: hidden;
+    `;
+
+    // Generate 30 random sparkles
+    for (let i = 0; i < 30; i++) {
+      const sparkle = document.createElement('div');
+      const size = Math.random() * 3 + 1;
+      const x = Math.random() * 100;
+      const y = Math.random() * 100;
+      const delay = Math.random() * 3;
+      const duration = Math.random() * 2 + 2;
+      const colors = ['#22CC66', '#DDDD00', '#CC33BB', '#22AACC', '#888888'];
+      const color = colors[Math.floor(Math.random() * colors.length)];
+
+      sparkle.style.cssText = `
+        position: absolute;
+        left: ${x}%;
+        top: ${y}%;
+        width: ${size}px;
+        height: ${size}px;
+        background: ${color};
+        border-radius: 50%;
+        box-shadow: 0 0 ${size * 2}px ${color}, 0 0 ${size * 4}px ${color}60;
+        animation: sparkle ${duration}s ease-in-out ${delay}s infinite;
+        opacity: 0;
+      `;
+      sparkleContainer.appendChild(sparkle);
+    }
+
     state.overlay.appendChild(dimOverlay);
+    state.overlay.appendChild(sparkleContainer);
   }
 
   // Create cute doodle border
@@ -1202,13 +1245,15 @@ function showContainerHint(container, key) {
       overflow: visible;
     ">
       <!-- Soft highlight marker effect (behind) -->
-      <path d="${sketchPath.highlight}" fill="none" stroke="${colors.secondary}" stroke-width="16"
-        stroke-linecap="round" opacity="0.3" />
-      <!-- Cute sketchy border with multiple strokes -->
-      <path d="${sketchPath.main}" fill="none" stroke="${colors.primary}" stroke-width="4"
-        stroke-linecap="round" stroke-linejoin="round" opacity="0.85" />
-      <path d="${sketchPath.rough}" fill="none" stroke="${colors.primary}" stroke-width="2"
-        stroke-linecap="round" stroke-linejoin="round" opacity="0.4" />
+      <path d="${sketchPath.highlight}" fill="none" stroke="${colors.secondary}" stroke-width="18"
+        stroke-linecap="round" opacity="0.25" />
+      <!-- Hand-drawn sketchy border with multiple strokes -->
+      <path d="${sketchPath.main}" fill="none" stroke="${colors.primary}" stroke-width="3"
+        stroke-linecap="round" stroke-linejoin="round" opacity="0.9" />
+      <path d="${sketchPath.rough}" fill="none" stroke="${colors.primary}" stroke-width="1.5"
+        stroke-linecap="round" stroke-linejoin="round" opacity="0.5" />
+      <path d="${sketchPath.sketchy}" fill="none" stroke="${colors.accent || colors.primary}" stroke-width="1"
+        stroke-linecap="round" stroke-linejoin="round" opacity="0.35" />
       <!-- Add cute sparkles ✨ -->
       ${generateSparkles(rect.width, rect.height, colors.sparkle)}
     </svg>
@@ -1373,41 +1418,63 @@ function generateSketchPath(width, height) {
   return { main, rough, highlight };
 }
 
-// Generate a cute sketchy path
+// Generate a cute sketchy path with more hand-drawn character
 function generateCuteSketchPath(width, height) {
-  const padding = 3;
-  const roundness = 8; // More rounded for cuteness
+  const padding = 2;
+  const segments = 8; // More segments for more hand-drawn look
 
-  // Main cute path with rounded corners
+  // Generate wavy hand-drawn line helper
+  const wavyLine = (x1, y1, x2, y2, wobble = 3) => {
+    const midX = (x1 + x2) / 2 + (Math.random() - 0.5) * wobble;
+    const midY = (y1 + y2) / 2 + (Math.random() - 0.5) * wobble;
+    return `L ${midX},${midY} L ${x2},${y2}`;
+  };
+
+  // Corner points with randomness
+  const p1 = { x: padding + (Math.random() - 0.5) * 6, y: padding + (Math.random() - 0.5) * 6 };
+  const p2 = { x: width - padding + (Math.random() - 0.5) * 6, y: padding + (Math.random() - 0.5) * 6 };
+  const p3 = { x: width - padding + (Math.random() - 0.5) * 6, y: height - padding + (Math.random() - 0.5) * 6 };
+  const p4 = { x: padding + (Math.random() - 0.5) * 6, y: height - padding + (Math.random() - 0.5) * 6 };
+
+  // Main stroke - primary hand-drawn line
   const main = `
-    M ${padding + Math.random() * 2},${padding + Math.random() * 2}
-    Q ${width / 2},${padding + Math.random() * 4} ${width - padding - Math.random() * 2},${padding + Math.random() * 2}
-    Q ${width - padding + Math.random() * 2},${height / 2} ${width - padding - Math.random() * 2},${height - padding - Math.random() * 2}
-    Q ${width / 2},${height - padding + Math.random() * 4} ${padding + Math.random() * 2},${height - padding - Math.random() * 2}
-    Q ${padding + Math.random() * 4},${height / 2} ${padding + Math.random() * 2},${padding + Math.random() * 2}
-    Z
+    M ${p1.x},${p1.y}
+    ${wavyLine(p1.x, p1.y, p2.x, p2.y, 4)}
+    ${wavyLine(p2.x, p2.y, p3.x, p3.y, 4)}
+    ${wavyLine(p3.x, p3.y, p4.x, p4.y, 4)}
+    ${wavyLine(p4.x, p4.y, p1.x, p1.y, 4)}
   `;
 
-  // Rough path with more wobble
+  // Rough stroke - second pass with offset (like going over the line again)
+  const offset1 = 2;
   const rough = `
-    M ${padding + Math.random() * 5},${padding + Math.random() * 5}
-    Q ${width / 2},${padding + Math.random() * 8} ${width - padding - Math.random() * 5},${padding + Math.random() * 5}
-    Q ${width - padding + Math.random() * 5},${height / 2} ${width - padding - Math.random() * 5},${height - padding - Math.random() * 5}
-    Q ${width / 2},${height - padding + Math.random() * 8} ${padding + Math.random() * 5},${height - padding - Math.random() * 5}
-    Q ${padding + Math.random() * 8},${height / 2} ${padding + Math.random() * 5},${padding + Math.random() * 5}
-    Z
+    M ${p1.x + offset1},${p1.y + offset1}
+    ${wavyLine(p1.x + offset1, p1.y + offset1, p2.x + offset1, p2.y - offset1, 6)}
+    ${wavyLine(p2.x + offset1, p2.y - offset1, p3.x - offset1, p3.y - offset1, 6)}
+    ${wavyLine(p3.x - offset1, p3.y - offset1, p4.x - offset1, p4.y + offset1, 6)}
+    ${wavyLine(p4.x - offset1, p4.y + offset1, p1.x + offset1, p1.y + offset1, 6)}
   `;
 
-  // Soft highlight
+  // Third pass - extra sketchy stroke
+  const offset2 = -2;
+  const sketchy = `
+    M ${p1.x + offset2},${p1.y + offset2}
+    ${wavyLine(p1.x + offset2, p1.y + offset2, p2.x + offset2, p2.y + offset2, 8)}
+    ${wavyLine(p2.x + offset2, p2.y + offset2, p3.x + offset2, p3.y + offset2, 8)}
+    ${wavyLine(p3.x + offset2, p3.y + offset2, p4.x + offset2, p4.y + offset2, 8)}
+    ${wavyLine(p4.x + offset2, p4.y + offset2, p1.x + offset2, p1.y + offset2, 8)}
+  `;
+
+  // Highlight marker effect (softer, behind)
   const highlight = `
-    M ${padding - 1},${padding - 1}
-    L ${width - padding + 1},${padding - 1}
-    L ${width - padding + 1},${height - padding + 1}
-    L ${padding - 1},${height - padding + 1}
+    M ${padding - 2},${padding - 2}
+    L ${width - padding + 2},${padding - 2}
+    L ${width - padding + 2},${height - padding + 2}
+    L ${padding - 2},${height - padding + 2}
     Z
   `;
 
-  return { main, rough, highlight };
+  return { main, rough, sketchy, highlight };
 }
 
 // Generate cute sparkles ✨
@@ -1790,17 +1857,18 @@ function renderVimiumHintsUniversal(elements) {
       height: ${HINT_SIZE}px;
       background: ${color};
       color: #000;
-      border-radius: 5px;
+      border-radius: 6px;
       display: flex;
       align-items: center;
       justify-content: center;
       font-family: 'SF Mono', Monaco, 'Consolas', monospace;
       font-weight: 700;
-      font-size: ${isNumber ? '12px' : '11px'};
+      font-size: ${isNumber ? '14px' : '12px'};
       z-index: 2147483647;
       pointer-events: none;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
-      border: 1px solid rgba(255, 255, 255, 0.9);
+      box-shadow: 0 0 4px ${color}40, 0 2px 6px rgba(0, 0, 0, 0.5);
+      border: 2px solid rgba(255, 255, 255, 0.9);
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
     `;
     hint.textContent = key;
     state.overlay.appendChild(hint);
@@ -1815,12 +1883,13 @@ function renderVimiumHintsUniversal(elements) {
       width: ${rect.width}px;
       height: ${rect.height}px;
       border: 2px solid ${color};
-      border-radius: 0px;
+      border-radius: 4px;
       box-sizing: border-box;
       pointer-events: none;
       z-index: 2147483646;
       opacity: 1.0;
       background: transparent;
+      box-shadow: 0 0 3px ${color}40;
     `;
     state.overlay.appendChild(border);
   });
@@ -1890,13 +1959,57 @@ function exitToContainers() {
       left: 0;
       width: 100vw;
       height: 100vh;
-      background: rgba(0, 0, 0, 0.4);
+      background: rgba(8, 8, 12, 0.4);
+      backdrop-filter: blur(3px) saturate(1.1);
       z-index: 2147483640;
       pointer-events: none;
       opacity: 0;
-      transition: opacity 0.25s ease-in;
+      transition: opacity 0.3s ease-in;
     `;
     state.overlay.appendChild(dimOverlay);
+
+    // Add sparkle stars if they don't exist
+    if (!state.overlay.querySelector('.browse-sparkles')) {
+      const sparkleContainer = document.createElement('div');
+      sparkleContainer.className = 'browse-sparkles';
+      sparkleContainer.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        pointer-events: none;
+        z-index: 2147483641;
+        overflow: hidden;
+      `;
+
+      for (let i = 0; i < 30; i++) {
+        const sparkle = document.createElement('div');
+        const size = Math.random() * 3 + 1;
+        const x = Math.random() * 100;
+        const y = Math.random() * 100;
+        const delay = Math.random() * 3;
+        const duration = Math.random() * 2 + 2;
+        const colors = ['#22CC66', '#DDDD00', '#CC33BB', '#22AACC', '#888888'];
+        const color = colors[Math.floor(Math.random() * colors.length)];
+
+        sparkle.style.cssText = `
+          position: absolute;
+          left: ${x}%;
+          top: ${y}%;
+          width: ${size}px;
+          height: ${size}px;
+          background: ${color};
+          border-radius: 50%;
+          box-shadow: 0 0 ${size * 2}px ${color}, 0 0 ${size * 4}px ${color}60;
+          animation: sparkle ${duration}s ease-in-out ${delay}s infinite;
+          opacity: 0;
+        `;
+        sparkleContainer.appendChild(sparkle);
+      }
+
+      state.overlay.appendChild(sparkleContainer);
+    }
 
     // Trigger fade in
     requestAnimationFrame(() => {
@@ -2327,12 +2440,12 @@ function getActionType(annotation, element) {
 function getColorForAction(actionType, importance, isNumber) {
   const colors = {
     // Action type colors
-    primary: '#00E676',      // Green for primary/CTA
-    destructive: '#FF5252',  // Red for destructive
-    navigation: '#448AFF',   // Blue for navigation
-    external: '#7C4DFF',     // Purple for external links
-    input: '#FFAB40',        // Orange for inputs
-    secondary: '#FFEB3B'     // Yellow for secondary
+    primary: '#22BB66',      // Green for primary/CTA
+    destructive: '#DD4444',  // Red for destructive
+    navigation: '#4488DD',   // Blue for navigation
+    external: '#8844DD',     // Purple for external links
+    input: '#DD8844',        // Orange for inputs
+    secondary: '#DDDD00'     // Yellow for secondary
   };
 
   // For high importance, use the action type color
@@ -2520,7 +2633,7 @@ function showHintForElement(annotation, key, type = 'auto') {
 function clearHints() {
   if (!state.overlay) return;
 
-  state.overlay.querySelectorAll('.browse-hint, .browse-hint-border, .browse-container-border, .browse-container-badge, .browse-active-container, .browse-vimium-hint, .browse-element-border').forEach(el => {
+  state.overlay.querySelectorAll('.browse-hint, .browse-hint-border, .browse-container-border, .browse-container-badge, .browse-active-container, .browse-vimium-hint, .browse-element-border, .browse-sparkles').forEach(el => {
     el.remove();
   });
 }
