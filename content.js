@@ -1104,23 +1104,21 @@ function renderContainers() {
   // Filter out fake containers (AI sometimes identifies single elements as containers)
   // A real container should have multiple elements OR be a known semantic section
   const validContainers = state.containers.filter(container => {
-    // Check if the container actually contains multiple interactive elements
+    // Check if the container actually contains multiple elements
     const containerEl = queryElementSafe(container.selector);
     if (!containerEl) {
       console.log('[Browse] Filtered container with invalid selector:', container.label);
       return false;
     }
 
-    // Count interactive elements within
-    const interactiveCount = containerEl.querySelectorAll(
-      'a[href], button, input, textarea, select, [onclick], [tabindex], [role="button"], [role="link"]'
-    ).length;
+    // Count ALL elements within (not just interactive)
+    const elementCount = containerEl.querySelectorAll('*').length;
 
-    // Must have at least 2 interactive elements to be considered a valid container
-    const isValid = interactiveCount >= 2;
+    // Must have at least 2 elements to be considered a valid container
+    const isValid = elementCount >= 2;
 
     if (!isValid) {
-      console.log('[Browse] Filtered fake container:', container.label, 'only had', interactiveCount, 'elements');
+      console.log('[Browse] Filtered fake container:', container.label, 'only had', elementCount, 'elements');
     }
 
     return isValid;
