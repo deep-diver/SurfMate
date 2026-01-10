@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Browse - LLM-Powered Navigation",
+  "name": "SurfMate - AI-Powered Navigation",
   "version": "1.0.0",
-  "description": "Intelligently annotate web pages with keyboard shortcuts using AI",
+  "description": "Your friendly navigation companion - surf the web with AI-powered keyboard shortcuts",
   "permissions": [
     "storage",
     "activeTab",

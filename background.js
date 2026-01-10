@@ -33,7 +33,7 @@ chrome.runtime.onInstalled.addListener(() => {
     provider = result.provider || 'openai';
     model = result.model || 'gpt-5.2';
     language = result.language || 'en';
-    console.log('[Browse] Initialized with provider:', provider, 'model:', model, 'language:', language);
+    console.log('[SurfMate] Initialized with provider:', provider, 'model:', model, 'language:', language);
   });
 });
 
@@ -57,24 +57,24 @@ chrome.storage.onChanged.addListener((changes, namespace) => {
     }
     if (changes.provider) {
       provider = changes.provider.newValue;
-      console.log('[Browse] Provider changed to:', provider);
+      console.log('[SurfMate] Provider changed to:', provider);
     }
     if (changes.model) {
       model = changes.model.newValue;
-      console.log('[Browse] Model changed to:', model);
+      console.log('[SurfMate] Model changed to:', model);
     }
     if (changes.language) {
       language = changes.language.newValue;
-      console.log('[Browse] Language changed to:', language);
+      console.log('[SurfMate] Language changed to:', language);
     }
   }
 });
 
 // Listen for keyboard shortcut command
 chrome.commands.onCommand.addListener((command) => {
-  console.log('[Browse] Command received:', command);
+  console.log('[SurfMate] Command received:', command);
   if (command === 'toggle-annotations') {
-    console.log('[Browse] Toggling annotations...');
+    console.log('[SurfMate] Toggling annotations...');
     toggleExtension();
   }
 });
@@ -82,19 +82,19 @@ chrome.commands.onCommand.addListener((command) => {
 // Toggle extension on/off
 function toggleExtension() {
   extensionEnabled = !extensionEnabled;
-  console.log('[Browse] Extension enabled:', extensionEnabled);
+  console.log('[SurfMate] Extension enabled:', extensionEnabled);
   chrome.storage.local.set({ extensionEnabled });
 
   // Notify all tabs about the state change
   chrome.tabs.query({}, (tabs) => {
-    console.log('[Browse] Sending toggle message to', tabs.length, 'tabs');
+    console.log('[SurfMate] Sending toggle message to', tabs.length, 'tabs');
     tabs.forEach(tab => {
       if (tab.url && (tab.url.startsWith('http://') || tab.url.startsWith('https://'))) {
         chrome.tabs.sendMessage(tab.id, {
           type: 'toggleBrowse',
           enabled: extensionEnabled
         }).catch((error) => {
-          console.log('[Browse] Failed to send message to tab', tab.id, error);
+          console.log('[SurfMate] Failed to send message to tab', tab.id, error);
         });
       }
     });
@@ -154,11 +154,11 @@ async function handleAnalyzePage(message) {
   const cached = pageCache.get(cacheKey);
 
   if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
-    console.log('[Browse] Cache hit for:', url);
+    console.log('[SurfMate] Cache hit for:', url);
     return cached.data;
   }
 
-  console.log('[Browse] Cache miss, analyzing with', provider, 'using', model, '...');
+  console.log('[SurfMate] Cache miss, analyzing with', provider, 'using', model, '...');
 
   // Determine API endpoint and parameters based on provider
   const apiEndpoint = provider === 'groq'
@@ -293,8 +293,8 @@ Return a JSON object with "containers" (each with selector, label, type) and "st
     requestBody.response_format = { type: 'json_object' };
   }
 
-  console.log('[Browse] Sending request to', apiEndpoint);
-  console.log('[Browse] Request body:', JSON.stringify(requestBody, null, 2));
+  console.log('[SurfMate] Sending request to', apiEndpoint);
+  console.log('[SurfMate] Request body:', JSON.stringify(requestBody, null, 2));
 
   try {
     const response = await fetch(apiEndpoint, {
@@ -306,25 +306,25 @@ Return a JSON object with "containers" (each with selector, label, type) and "st
       body: JSON.stringify(requestBody)
     });
 
-    console.log('[Browse] Response status:', response.status, response.statusText);
+    console.log('[SurfMate] Response status:', response.status, response.statusText);
 
     if (!response.ok) {
       const error = await response.json();
-      console.error('[Browse] API error response:', error);
+      console.error('[SurfMate] API error response:', error);
       throw new Error(error.error?.message || 'API request failed');
     }
 
     const data = await response.json();
-    console.log('[Browse] API response data:', data);
+    console.log('[SurfMate] API response data:', data);
 
     const content = data.choices?.[0]?.message?.content;
 
-    console.log('[Browse] Raw API response length:', content?.length);
+    console.log('[SurfMate] Raw API response length:', content?.length);
 
     // Check if response is empty
     if (!content || content.trim().length === 0) {
-      console.error('[Browse] Empty API response');
-      console.error('[Browse] Full API response:', JSON.stringify(data, null, 2));
+      console.error('[SurfMate] Empty API response');
+      console.error('[SurfMate] Full API response:', JSON.stringify(data, null, 2));
       throw new Error('Empty response from API');
     }
 
@@ -338,21 +338,21 @@ Return a JSON object with "containers" (each with selector, label, type) and "st
       const jsonMatch = content.match(/\{[\s\S]*"containers"[\s\S]*"standalone"[\s\S]*\}/);
       if (jsonMatch) {
         contentToParse = jsonMatch[0];
-        console.log('[Browse] Extracted JSON from Groq response');
+        console.log('[SurfMate] Extracted JSON from Groq response');
       }
     }
 
     try {
       const parsed = JSON.parse(contentToParse);
-      console.log('[Browse] Parsed response:', parsed);
+      console.log('[SurfMate] Parsed response:', parsed);
       result = {
         containers: parsed.containers || [],
         standalone: parsed.standalone || []
       };
     } catch (e) {
-      console.error('[Browse] Parse error:', e);
-      console.error('[Browse] Content that failed to parse:', contentToParse);
-      console.error('[Browse] Raw content:', content);
+      console.error('[SurfMate] Parse error:', e);
+      console.error('[SurfMate] Content that failed to parse:', contentToParse);
+      console.error('[SurfMate] Raw content:', content);
       throw new Error('Failed to parse LLM response: ' + e.message);
     }
 
@@ -362,12 +362,12 @@ Return a JSON object with "containers" (each with selector, label, type) and "st
       data: result
     });
 
-    console.log('[Browse] Result cached for:', url);
+    console.log('[SurfMate] Result cached for:', url);
 
     return result;
 
   } catch (error) {
-    console.error('[Browse] API error:', error);
+    console.error('[SurfMate] API error:', error);
     return { error: error.message };
   }
 }
@@ -387,11 +387,11 @@ async function handleAnalyzeContainer(message) {
   const cached = pageCache.get(cacheKey);
 
   if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
-    console.log('[Browse] Cache hit for container:', containerLabel);
+    console.log('[SurfMate] Cache hit for container:', containerLabel);
     return cached.data;
   }
 
-  console.log('[Browse] Cache miss, analyzing container:', containerLabel, 'with', provider, 'using', model, '...');
+  console.log('[SurfMate] Cache miss, analyzing container:', containerLabel, 'with', provider, 'using', model, '...');
 
   // Determine API endpoint and parameters based on provider
   const apiEndpoint = provider === 'groq'
@@ -495,7 +495,7 @@ Analyze this container and return interactive elements in WORKFLOW ORDER with ME
     requestBody.response_format = { type: 'json_object' };
   }
 
-  console.log('[Browse] Sending container analysis request to', apiEndpoint);
+  console.log('[SurfMate] Sending container analysis request to', apiEndpoint);
 
   try {
     const response = await fetch(apiEndpoint, {
@@ -507,23 +507,23 @@ Analyze this container and return interactive elements in WORKFLOW ORDER with ME
       body: JSON.stringify(requestBody)
     });
 
-    console.log('[Browse] Response status:', response.status, response.statusText);
+    console.log('[SurfMate] Response status:', response.status, response.statusText);
 
     if (!response.ok) {
       const error = await response.json();
-      console.error('[Browse] API error response:', error);
+      console.error('[SurfMate] API error response:', error);
       throw new Error(error.error?.message || 'API request failed');
     }
 
     const data = await response.json();
     const content = data.choices?.[0]?.message?.content;
 
-    console.log('[Browse] Raw API response length:', content?.length);
+    console.log('[SurfMate] Raw API response length:', content?.length);
 
     // Check if response is empty
     if (!content || content.trim().length === 0) {
-      console.error('[Browse] Empty API response');
-      console.error('[Browse] Full API response:', JSON.stringify(data, null, 2));
+      console.error('[SurfMate] Empty API response');
+      console.error('[SurfMate] Full API response:', JSON.stringify(data, null, 2));
       throw new Error('Empty response from API');
     }
 
@@ -536,20 +536,20 @@ Analyze this container and return interactive elements in WORKFLOW ORDER with ME
       const jsonMatch = content.match(/\{[\s\S]*"elements"[\s\S]*\}/);
       if (jsonMatch) {
         contentToParse = jsonMatch[0];
-        console.log('[Browse] Extracted JSON from Groq response');
+        console.log('[SurfMate] Extracted JSON from Groq response');
       }
     }
 
     try {
       const parsed = JSON.parse(contentToParse);
-      console.log('[Browse] Parsed container response:', parsed);
+      console.log('[SurfMate] Parsed container response:', parsed);
       result = {
         elements: parsed.elements || []
       };
     } catch (e) {
-      console.error('[Browse] Parse error:', e);
-      console.error('[Browse] Content that failed to parse:', contentToParse);
-      console.error('[Browse] Raw content:', content);
+      console.error('[SurfMate] Parse error:', e);
+      console.error('[SurfMate] Content that failed to parse:', contentToParse);
+      console.error('[SurfMate] Raw content:', content);
       throw new Error('Failed to parse LLM response: ' + e.message);
     }
 
@@ -559,12 +559,12 @@ Analyze this container and return interactive elements in WORKFLOW ORDER with ME
       data: result
     });
 
-    console.log('[Browse] Container result cached for:', containerLabel);
+    console.log('[SurfMate] Container result cached for:', containerLabel);
 
     return result;
 
   } catch (error) {
-    console.error('[Browse] Container API error:', error);
+    console.error('[SurfMate] Container API error:', error);
     return { error: error.message };
   }
 }

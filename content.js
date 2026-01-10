@@ -152,7 +152,7 @@ function sanitizeSelector(selector, doc = document) {
     if (testEl) return escaped;
   } catch (e) {
     // Selector is invalid, try to fix it
-    console.log('[Browse] Invalid selector, sanitizing:', selector);
+    console.log('[SurfMate] Invalid selector, sanitizing:', selector);
   }
 
   // Try original selector in case escaping wasn't needed
@@ -177,7 +177,7 @@ function sanitizeSelector(selector, doc = document) {
     try {
       const testEl = doc.querySelector(sanitized);
       if (testEl) {
-        console.log('[Browse] Sanitized (nth-child removal):', selector, '->', sanitized);
+        console.log('[SurfMate] Sanitized (nth-child removal):', selector, '->', sanitized);
         return sanitized;
       }
     } catch (e) {}
@@ -190,7 +190,7 @@ function sanitizeSelector(selector, doc = document) {
       try {
         const testEl = doc.querySelector(shortSelector);
         if (testEl) {
-          console.log('[Browse] Sanitized (last 2 parts):', selector, '->', shortSelector);
+          console.log('[SurfMate] Sanitized (last 2 parts):', selector, '->', shortSelector);
           return shortSelector;
         }
       } catch (e) {}
@@ -200,14 +200,14 @@ function sanitizeSelector(selector, doc = document) {
       try {
         const testEl = doc.querySelector(lastPart);
         if (testEl) {
-          console.log('[Browse] Sanitized (last part):', selector, '->', lastPart);
+          console.log('[SurfMate] Sanitized (last part):', selector, '->', lastPart);
           return lastPart;
         }
       } catch (e) {}
     }
   }
 
-  console.warn('[Browse] Could not sanitize selector:', selector);
+  console.warn('[SurfMate] Could not sanitize selector:', selector);
   return null;
 }
 
@@ -783,7 +783,7 @@ async function activate() {
   state.isGradio = isGradioApp();
   state.gradioVersion = getGradioVersion();
   if (state.isGradio) {
-    console.log('[Browse] Gradio app detected! Version:', state.gradioVersion);
+    console.log('[SurfMate] Gradio app detected! Version:', state.gradioVersion);
   }
 
   createOverlay();
@@ -795,9 +795,9 @@ async function activate() {
 
   // Debug: Log snapshot info
   const containerElements = snapshot.elements.filter(e => e.isContainer);
-  console.log('[Browse] Snapshot total elements:', snapshot.elements.length);
-  console.log('[Browse] Container elements (isContainer:true):', containerElements.length);
-  console.log('[Browse] Container element selectors:', containerElements.slice(0, 5).map(e => `${e.tag} - ${e.selector}`));
+  console.log('[SurfMate] Snapshot total elements:', snapshot.elements.length);
+  console.log('[SurfMate] Container elements (isContainer:true):', containerElements.length);
+  console.log('[SurfMate] Container element selectors:', containerElements.slice(0, 5).map(e => `${e.tag} - ${e.selector}`));
 
   try {
     const response = await chrome.runtime.sendMessage({
@@ -815,13 +815,13 @@ async function activate() {
     state.standalone = response.standalone || [];
 
     // Debug: Log what we received
-    console.log('[Browse] AI returned containers:', state.containers.length, 'standalone:', state.standalone.length);
-    console.log('[Browse] Sample container data:', state.containers.slice(0, 3).map(c => ({
+    console.log('[SurfMate] AI returned containers:', state.containers.length, 'standalone:', state.standalone.length);
+    console.log('[SurfMate] Sample container data:', state.containers.slice(0, 3).map(c => ({
       label: c.label,
       selector: c.selector,
       elementsCount: c.elements?.length || 0
     })));
-    console.log('[Browse] Sample standalone selectors:', state.standalone.slice(0, 3).map(s => s.selector));
+    console.log('[SurfMate] Sample standalone selectors:', state.standalone.slice(0, 3).map(s => s.selector));
 
     // Populate annotations for hover effects
     state.annotations = [...state.containers, ...state.standalone];
@@ -1256,7 +1256,7 @@ function renderContainers() {
     // Check if the container actually contains multiple elements
     const containerEl = queryElementSafe(container.selector);
     if (!containerEl) {
-      console.log('[Browse] Filtered container with invalid selector:', container.label);
+      console.log('[SurfMate] Filtered container with invalid selector:', container.label);
       return false;
     }
 
@@ -1267,13 +1267,13 @@ function renderContainers() {
     const isValid = elementCount >= 2;
 
     if (!isValid) {
-      console.log('[Browse] Filtered fake container:', container.label, 'only had', elementCount, 'elements');
+      console.log('[SurfMate] Filtered fake container:', container.label, 'only had', elementCount, 'elements');
     }
 
     return isValid;
   });
 
-  console.log('[Browse] Valid containers:', validContainers.length, 'out of', state.containers.length);
+  console.log('[SurfMate] Valid containers:', validContainers.length, 'out of', state.containers.length);
 
   // Render containers with number hints
   validContainers.forEach((container, i) => {
@@ -1701,7 +1701,7 @@ function enterContainer(container) {
     );
 
     if (!isVisible) {
-      console.log('[Browse] Container not visible, scrolling into view:', container.label);
+      console.log('[SurfMate] Container not visible, scrolling into view:', container.label);
       containerEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
   }
@@ -1720,7 +1720,7 @@ function enterContainer(container) {
   // Populate annotations for hover effects (container elements only when inside)
   state.annotations = state.currentElements;
 
-  console.log('[Browse] Found', state.currentElements.length, 'interactive elements in', container.label);
+  console.log('[SurfMate] Found', state.currentElements.length, 'interactive elements in', container.label);
 
   renderContainerElements(container);
 }
@@ -1771,30 +1771,30 @@ function findInteractiveElementsInContainer(container) {
     '[data-click]'
   ];
 
-  console.log('[Browse] Searching for interactive elements in', container.label);
+  console.log('[SurfMate] Searching for interactive elements in', container.label);
 
   // Find all matching elements within this container
   interactiveSelectors.forEach(selector => {
     try {
       const found = containerEl.querySelectorAll(selector);
-      console.log('[Browse] Selector', selector, 'found', found.length, 'elements');
+      console.log('[SurfMate] Selector', selector, 'found', found.length, 'elements');
 
       found.forEach((el) => {
         // Skip duplicates using actual DOM element reference
         if (seenElements.has(el)) {
-          console.log('[Browse] Skipping duplicate element');
+          console.log('[SurfMate] Skipping duplicate element');
           return;
         }
 
         // Skip if element is not visible
         if (!isVisible(el)) {
-          console.log('[Browse] Skipping invisible element');
+          console.log('[SurfMate] Skipping invisible element');
           return;
         }
 
         const rect = el.getBoundingClientRect();
         if (rect.width === 0 || rect.height === 0) {
-          console.log('[Browse] Skipping element with zero size');
+          console.log('[SurfMate] Skipping element with zero size');
           return;
         }
 
@@ -1815,14 +1815,14 @@ function findInteractiveElementsInContainer(container) {
           _element: el
         });
 
-        console.log('[Browse] Added element:', label, 'with selector:', simpleSelector);
+        console.log('[SurfMate] Added element:', label, 'with selector:', simpleSelector);
       });
     } catch (e) {
-      console.warn('[Browse] Error finding elements with selector:', selector, e);
+      console.warn('[SurfMate] Error finding elements with selector:', selector, e);
     }
   });
 
-  console.log('[Browse] Vimium-style found', elements.length, 'elements in', container.label);
+  console.log('[SurfMate] Vimium-style found', elements.length, 'elements in', container.label);
   return elements;
 }
 
@@ -1918,7 +1918,7 @@ function renderContainerElements(container) {
   }
 
   // VIMIUM-STYLE: Show ALL elements without filtering!
-  console.log('[Browse] Vimium-style: Rendering', state.currentElements.length, 'elements');
+  console.log('[SurfMate] Vimium-style: Rendering', state.currentElements.length, 'elements');
 
   renderVimiumHintsUniversal(state.currentElements);
 
@@ -2075,7 +2075,7 @@ function renderVimiumHintsUniversal(elements) {
     occupiedRects.push({ x: rect.left, y: rect.top, width: rect.width, height: rect.height });
   });
 
-  console.log('[Browse] Rendered', validElements.length, 'vimium hints (on target elements)');
+  console.log('[SurfMate] Rendered', validElements.length, 'vimium hints (on target elements)');
 }
 
 // Filter out elements that are too close together (anti-crowding)
@@ -2086,7 +2086,7 @@ function filterCrowdedElements(elements, minDistance = 60) {
   elements.forEach(element => {
     const el = queryElementSafe(element.selector);
     if (!el) {
-      console.log('[Browse] Skipping element with invalid selector:', element.selector);
+      console.log('[SurfMate] Skipping element with invalid selector:', element.selector);
       return;
     }
 
@@ -2094,7 +2094,7 @@ function filterCrowdedElements(elements, minDistance = 60) {
 
     // Skip elements with zero dimensions (hidden, collapsed, etc.)
     if (rect.width === 0 || rect.height === 0) {
-      console.log('[Browse] Skipping element with zero dimensions:', element.label);
+      console.log('[SurfMate] Skipping element with zero dimensions:', element.label);
       return;
     }
 
@@ -2115,11 +2115,11 @@ function filterCrowdedElements(elements, minDistance = 60) {
       filtered.push(element);
       occupiedPositions.push({ x: centerX, y: centerY });
     } else {
-      console.log('[Browse] Filtered crowded element:', element.label, `at (${centerX.toFixed(0)}, ${centerY.toFixed(0)})`);
+      console.log('[SurfMate] Filtered crowded element:', element.label, `at (${centerX.toFixed(0)}, ${centerY.toFixed(0)})`);
     }
   });
 
-  console.log('[Browse] Filtered', filtered.length, 'elements from', elements.length, 'total');
+  console.log('[SurfMate] Filtered', filtered.length, 'elements from', elements.length, 'total');
   return filtered;
 }
 
@@ -2269,7 +2269,7 @@ function generateDOMSnapshot() {
 
   // Add Gradio-specific selectors if this is a Gradio app
   if (state.isGradio) {
-    console.log('[Browse] Adding Gradio-specific container selectors');
+    console.log('[SurfMate] Adding Gradio-specific container selectors');
     // Prepend Gradio selectors for better priority
     containerSelectors.unshift(...GRADIO_CONTAINER_SELECTORS);
   }
@@ -2278,7 +2278,7 @@ function generateDOMSnapshot() {
 
   // For Gradio apps, add specific component detection first
   if (state.isGradio) {
-    console.log('[Browse] Collecting Gradio-specific components');
+    console.log('[SurfMate] Collecting Gradio-specific components');
 
     // Collect Gradio buttons (submit, clear, etc.)
     try {
@@ -2342,7 +2342,7 @@ function generateDOMSnapshot() {
       });
     } catch (e) {}
 
-    console.log('[Browse] Collected', elements.filter(e => e.isGradioComponent).length, 'Gradio components');
+    console.log('[SurfMate] Collected', elements.filter(e => e.isGradioComponent).length, 'Gradio components');
   }
 
   // First, collect container elements with lower priority
@@ -2454,7 +2454,7 @@ function generateDOMSnapshot() {
   elements.sort((a, b) => b.priority - a.priority);
   snapshot.elements = elements.slice(0, 500); // Increased to 500 to get more containers
 
-  console.log('[Browse] Collected', elements.length, 'elements (', snapshot.elements.filter(e => e.isContainer).length, 'containers)');
+  console.log('[SurfMate] Collected', elements.length, 'elements (', snapshot.elements.filter(e => e.isContainer).length, 'containers)');
 
   return snapshot;
 }
@@ -2533,7 +2533,7 @@ function generateContainerSnapshot(container) {
   elements.sort((a, b) => b.priority - a.priority);
   snapshot.elements = elements.slice(0, 200); // Increased from 20 to 200
 
-  console.log('[Browse] Container snapshot generated with', snapshot.elements.length, 'elements');
+  console.log('[SurfMate] Container snapshot generated with', snapshot.elements.length, 'elements');
 
   return snapshot;
 }
@@ -2707,13 +2707,13 @@ function showHintForElement(annotation, key, type = 'auto') {
     element = annotation._element;
     // Verify the element is still in the DOM
     if (!document.contains(element)) {
-      console.warn('[Browse] Stored element no longer in DOM:', annotation.label);
+      console.warn('[SurfMate] Stored element no longer in DOM:', annotation.label);
       return;
     }
   }
 
   if (!element) {
-    console.warn('[Browse] Could not find element for:', annotation.label, 'with selector:', annotation.selector);
+    console.warn('[SurfMate] Could not find element for:', annotation.label, 'with selector:', annotation.selector);
     return;
   }
 
@@ -2834,14 +2834,14 @@ function activateElement(annotation, key) {
     element = annotation._element;
     // Verify the element is still in the DOM
     if (!document.contains(element)) {
-      console.warn('[Browse] Stored element no longer in DOM, cannot activate:', annotation.label);
+      console.warn('[SurfMate] Stored element no longer in DOM, cannot activate:', annotation.label);
       showHUD('Element no longer available');
       return;
     }
   }
 
   if (!element) {
-    console.warn('[Browse] Could not find element to activate:', annotation.label);
+    console.warn('[SurfMate] Could not find element to activate:', annotation.label);
     showHUD('Could not find element');
     return;
   }
@@ -3684,7 +3684,7 @@ function resolveAllAnnotationOverlaps() {
   const boxes = collectAnnotationBoxes();
   if (boxes.length < 2) return;
 
-  console.log('[Browse] Resolving overlaps for', boxes.length, 'annotations');
+  console.log('[SurfMate] Resolving overlaps for', boxes.length, 'annotations');
   resolveAnnotationOverlaps(boxes);
 
   // Remove transitions after positioning is complete
