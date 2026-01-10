@@ -128,8 +128,6 @@ The result is intelligent navigation with:
 - **Workflow-aware ordering**: Input fields come before submit buttons
 - **Perfect collision handling**: Hints never overlap
 
-![Inner Container Level](inner-container-level.png)
-
 ## Architecture
 
 ### Two-Level Navigation Model
