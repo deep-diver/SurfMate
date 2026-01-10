@@ -126,21 +126,45 @@ const COLORS = {
   text: '#ffffff'
 };
 
+// Escape special CSS characters in class names (like colons in Tailwind classes)
+function escapeCssSelector(selector) {
+  if (!selector) return selector;
+
+  // Escape colons and other special chars in class names/attributes
+  // But NOT in pseudo-classes like :hover, :nth-child(), etc.
+  // Pattern: matches class names with colons like .hover:text-indigo-700
+  return selector.replace(/(\.(?:[\w-]+:[^:\[\]\s()]+|[^\s>\[\]]+:[^:\[\]\s()]+))/g, (match) => {
+    // Escape the colon in the class name (e.g., .hover:text-indigo-700 -> .hover\:text-indigo-700)
+    return match.replace(/:(?=[^:\[\]\s()])/g, '\\:');
+  });
+}
+
 // Sanitize selector to handle problematic pseudo-classes
 function sanitizeSelector(selector, doc = document) {
   if (!selector) return null;
 
-  // Try the original selector first
+  // First escape special CSS characters in class names (Tailwind classes with colons)
+  const escaped = escapeCssSelector(selector);
+
+  // Try the escaped selector first
   try {
-    const testEl = doc.querySelector(selector);
-    if (testEl) return selector;
+    const testEl = doc.querySelector(escaped);
+    if (testEl) return escaped;
   } catch (e) {
     // Selector is invalid, try to fix it
     console.log('[Browse] Invalid selector, sanitizing:', selector);
   }
 
+  // Try original selector in case escaping wasn't needed
+  if (escaped !== selector) {
+    try {
+      const testEl = doc.querySelector(selector);
+      if (testEl) return selector;
+    } catch (e) {}
+  }
+
   // Strategy 1: Remove :nth-child() pseudo-classes
-  let sanitized = selector
+  let sanitized = escaped
     .replace(/:nth-child\([^)]*\)/g, '')
     .replace(/:nth-of-type\([^)]*\)/g, '')
     .replace(/:first-child/g, '')
@@ -1094,6 +1118,131 @@ async function reloadContainer() {
   showHUD(`${state.currentElements.length} elements (a→z workflow order) • ESC: back`);
 }
 
+// ============================================================================
+// SMART COLLISION DETECTION AND RESOLUTION
+// ============================================================================
+
+/**
+ * Check if two rectangles overlap
+ * @param {Object} r1 - First rectangle {x, y, width, height}
+ * @param {Object} r2 - Second rectangle {x, y, width, height}
+ * @param {number} padding - Extra padding to consider
+ * @returns {boolean} True if rectangles overlap
+ */
+function rectanglesOverlap(r1, r2, padding = 8) {
+  return !(r1.x + r1.width + padding < r2.x ||
+           r2.x + r2.width + padding < r1.x ||
+           r1.y + r1.height + padding < r2.y ||
+           r2.y + r2.height + padding < r1.y);
+}
+
+/**
+ * Find a non-overlapping position for a hint
+ * Tries multiple positions around the target element in order of preference
+ * @param {Object} targetRect - The target element's rect
+ * @param {Object} hintSize - The hint's size {width, height}
+ * @param {Array} occupiedRects - Array of occupied rectangles
+ * @param {Object} viewport - Viewport dimensions {width, height}
+ * @returns {Object|null} Position {x, y} or null if no position found
+ */
+function findNonOverlappingPosition(targetRect, hintSize, occupiedRects, viewport) {
+  const padding = 20;
+  const hintPositions = [
+    // Center on element (current default)
+    { x: targetRect.x + (targetRect.width - hintSize.width) / 2,
+      y: targetRect.y + (targetRect.height - hintSize.height) / 2,
+      priority: 1 },
+    // Above center
+    { x: targetRect.x + (targetRect.width - hintSize.width) / 2,
+      y: targetRect.y - hintSize.height - 8,
+      priority: 2 },
+    // Below center
+    { x: targetRect.x + (targetRect.width - hintSize.width) / 2,
+      y: targetRect.y + targetRect.height + 8,
+      priority: 3 },
+    // Left center
+    { x: targetRect.x - hintSize.width - 8,
+      y: targetRect.y + (targetRect.height - hintSize.height) / 2,
+      priority: 4 },
+    // Right center
+    { x: targetRect.x + targetRect.width + 8,
+      y: targetRect.y + (targetRect.height - hintSize.height) / 2,
+      priority: 5 },
+    // Top-left corner
+    { x: targetRect.x - hintSize.width - 4,
+      y: targetRect.y - hintSize.height - 4,
+      priority: 6 },
+    // Top-right corner
+    { x: targetRect.x + targetRect.width + 4,
+      y: targetRect.y - hintSize.height - 4,
+      priority: 7 },
+    // Bottom-left corner
+    { x: targetRect.x - hintSize.width - 4,
+      y: targetRect.y + targetRect.height + 4,
+      priority: 8 },
+    // Bottom-right corner
+    { x: targetRect.x + targetRect.width + 4,
+      y: targetRect.y + targetRect.height + 4,
+      priority: 9 },
+  ];
+
+  // Sort by priority and find first non-overlapping position
+  for (const pos of hintPositions) {
+    // Check if position is within viewport bounds
+    if (pos.x < padding || pos.y < padding ||
+        pos.x + hintSize.width > viewport.width - padding ||
+        pos.y + hintSize.height > viewport.height - padding) {
+      continue;
+    }
+
+    const hintRect = { x: pos.x, y: pos.y, width: hintSize.width, height: hintSize.height };
+
+    // Check if this position overlaps with any occupied rect
+    const overlaps = occupiedRects.some(occupied => rectanglesOverlap(hintRect, occupied));
+    if (!overlaps) {
+      return pos;
+    }
+  }
+
+  // If all positions overlap, return the center position (best effort)
+  return hintPositions[0];
+}
+
+/**
+ * Calculate occupied rectangles from existing hints and bounding boxes
+ * @returns {Array} Array of occupied rectangles
+ */
+function getOccupiedRects() {
+  const occupied = [];
+
+  // Get all vimium hints
+  const vimiumHints = state.overlay?.querySelectorAll('.browse-vimium-hint') || [];
+  vimiumHints.forEach(hint => {
+    const rect = hint.getBoundingClientRect();
+    occupied.push({ x: rect.left, y: rect.top, width: rect.width, height: rect.height });
+  });
+
+  // Get all container badges
+  const containerBadges = state.overlay?.querySelectorAll('.browse-container-badge') || [];
+  containerBadges.forEach(badge => {
+    const rect = badge.getBoundingClientRect();
+    occupied.push({ x: rect.left, y: rect.top, width: rect.width, height: rect.height });
+  });
+
+  // Get all element borders (bounding boxes)
+  const elementBorders = state.overlay?.querySelectorAll('.browse-element-border') || [];
+  elementBorders.forEach(border => {
+    const rect = border.getBoundingClientRect();
+    occupied.push({ x: rect.left, y: rect.top, width: rect.width, height: rect.height });
+  });
+
+  return occupied;
+}
+
+// ============================================================================
+// RENDERING FUNCTIONS
+// ============================================================================
+
 // Render containers (Level 1)
 function renderContainers() {
   if (!state.overlay) return;
@@ -1790,6 +1939,24 @@ function renderVimiumHintsUniversal(elements) {
   // Track selector usage to handle duplicate selectors
   const selectorUsage = new Map();
 
+  // Track occupied rectangles for collision detection
+  const occupiedRects = [];
+  const viewport = { width: window.innerWidth, height: window.innerHeight };
+
+  // Pre-populate occupied rects with existing container badges and borders
+  // This prevents vimium hints from overlapping with container UI
+  const containerBadges = state.overlay.querySelectorAll('.browse-container-badge');
+  containerBadges.forEach(badge => {
+    const rect = badge.getBoundingClientRect();
+    occupiedRects.push({ x: rect.left, y: rect.top, width: rect.width, height: rect.height });
+  });
+
+  const containerBorders = state.overlay.querySelectorAll('.browse-container-border');
+  containerBorders.forEach(border => {
+    const rect = border.getBoundingClientRect();
+    occupiedRects.push({ x: rect.left, y: rect.top, width: rect.width, height: rect.height });
+  });
+
   // Collect valid elements
   const validElements = [];
   elements.forEach((element, i) => {
@@ -1799,8 +1966,10 @@ function renderVimiumHintsUniversal(elements) {
     const usageCount = selectorUsage.get(element.selector) || 0;
     selectorUsage.set(element.selector, usageCount + 1);
 
-    // Get all matching elements for this selector
-    const allMatches = document.querySelectorAll(element.selector);
+    // Get all matching elements for this selector (with proper escaping)
+    const sanitizedSelector = sanitizeSelector(element.selector);
+    if (!sanitizedSelector) return;
+    const allMatches = document.querySelectorAll(sanitizedSelector);
 
     if (allMatches.length === 0) return;
 
@@ -1826,6 +1995,7 @@ function renderVimiumHintsUniversal(elements) {
     return a.rect.left - b.rect.left;
   });
 
+  // Render hints with collision avoidance
   validElements.forEach((item) => {
     const { element, rect, key, index, domElement } = item;
 
@@ -1839,11 +2009,16 @@ function renderVimiumHintsUniversal(elements) {
     const isExtended = index >= NUMBERS.length + LETTERS.length;
     const color = isNumber ? COLORS.primary : (isExtended ? COLORS.accent : COLORS.secondary);
 
-    // Place hint directly OVER the element (centered)
-    const hintX = rect.left + (rect.width - HINT_SIZE) / 2;
-    const hintY = rect.top + (rect.height - HINT_SIZE) / 2;
+    // Find non-overlapping position for hint
+    const targetRect = { x: rect.left, y: rect.top, width: rect.width, height: rect.height };
+    const hintSize = { width: HINT_SIZE, height: HINT_SIZE };
+    const position = findNonOverlappingPosition(targetRect, hintSize, occupiedRects, viewport);
 
-    // Create hint badge (centered on element)
+    // Use found position or fallback to centered position
+    const hintX = position.x;
+    const hintY = position.y;
+
+    // Create hint badge
     const hint = document.createElement('div');
     hint.className = 'browse-vimium-hint';
     hint.setAttribute('data-key', key);
@@ -1873,6 +2048,9 @@ function renderVimiumHintsUniversal(elements) {
     hint.textContent = key;
     state.overlay.appendChild(hint);
 
+    // Add hint position to occupied rectangles
+    occupiedRects.push({ x: hintX, y: hintY, width: HINT_SIZE, height: HINT_SIZE });
+
     // Create EXACT bounding box (same position and size as element)
     const border = document.createElement('div');
     border.className = 'browse-element-border';
@@ -1892,6 +2070,9 @@ function renderVimiumHintsUniversal(elements) {
       box-shadow: 0 0 3px ${color}40;
     `;
     state.overlay.appendChild(border);
+
+    // Also add border to occupied rects (so hints don't overlap borders)
+    occupiedRects.push({ x: rect.left, y: rect.top, width: rect.width, height: rect.height });
   });
 
   console.log('[Browse] Rendered', validElements.length, 'vimium hints (on target elements)');
@@ -2633,7 +2814,7 @@ function showHintForElement(annotation, key, type = 'auto') {
 function clearHints() {
   if (!state.overlay) return;
 
-  state.overlay.querySelectorAll('.browse-hint, .browse-hint-border, .browse-container-border, .browse-container-badge, .browse-active-container, .browse-vimium-hint, .browse-element-border, .browse-sparkles').forEach(el => {
+  state.overlay.querySelectorAll('.browse-hint, .browse-hint-border, .browse-container-border, .browse-container-badge, .browse-active-container, .browse-vimium-hint, .browse-element-border, .browse-sparkles, .browse-hud').forEach(el => {
     el.remove();
   });
 }
@@ -2955,34 +3136,8 @@ function highlightRecentElement(selector) {
 
 // HUD and UI
 function showHUD(message) {
-  if (!state.overlay) return;
-
-  let hud = state.overlay.querySelector('.browse-hud');
-  if (!hud) {
-    hud = document.createElement('div');
-    hud.className = 'browse-hud';
-    state.overlay.appendChild(hud);
-  }
-
-  hud.textContent = message;
-  hud.style.cssText = `
-    position: fixed;
-    bottom: 20px;
-    left: 50%;
-    transform: translateX(-50%);
-    background: ${COLORS.bg};
-    color: ${COLORS.text};
-    padding: 12px 24px;
-    border-radius: 30px;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    font-size: 14px;
-    font-weight: 500;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-    border: 1px solid ${COLORS.border};
-    backdrop-filter: blur(10px);
-    z-index: 2147483648;
-    pointer-events: none;
-  `;
+  // Disabled - bottom center HUD is annoying
+  return;
 }
 
 function updateHUD(message) {
