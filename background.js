@@ -1,13 +1,64 @@
 // State management
 let extensionEnabled = false;
-let apiKey = '';
+let openaiApiKey = '';
+let geminiApiKey = '';
 let provider = 'openai';
 let model = 'gpt-5.2';
 let language = 'en';
 
+// Get current API key based on provider
+function getApiKey() {
+  return provider === 'gemini' ? geminiApiKey : openaiApiKey;
+}
+
 // Cache for analyzed pages
 const pageCache = new Map();
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+
+// Request queue to prevent rate limiting - sequentialize API calls
+let apiQueue = Promise.resolve();
+const REQUEST_DELAY = 500; // 500ms between requests for Gemini
+
+async function queueRequest(requestFn) {
+  // Add this request to the queue
+  const previousQueue = apiQueue;
+  apiQueue = previousQueue.then(async () => {
+    const result = await requestFn();
+    // Add delay between requests for Gemini
+    if (provider === 'gemini') {
+      await new Promise(resolve => setTimeout(resolve, REQUEST_DELAY));
+    }
+    return result;
+  }, (err) => {
+    // Even if there's an error, add delay before next request
+    return new Promise(resolve => setTimeout(resolve, REQUEST_DELAY)).then(() => Promise.reject(err));
+  });
+  return apiQueue;
+}
+
+// Retry fetch with exponential backoff for rate limiting (429 errors)
+async function fetchWithRetry(url, options, maxRetries = 3) {
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    const response = await fetch(url, options);
+
+    // If not a rate limit error, return immediately
+    if (response.status !== 429) {
+      return response;
+    }
+
+    // If this is the last attempt, throw the error
+    if (attempt === maxRetries - 1) {
+      const error = await response.json();
+      throw new Error(error.error?.message || 'Rate limit exceeded');
+    }
+
+    // Calculate exponential backoff delay: 2^attempt seconds (1s, 2s, 4s, etc.)
+    const delayMs = Math.pow(2, attempt) * 1000;
+    console.log(`[SurfMate] Rate limited (429), retrying in ${delayMs}ms... (attempt ${attempt + 1}/${maxRetries})`);
+
+    await new Promise(resolve => setTimeout(resolve, delayMs));
+  }
+}
 
 // Keep service worker alive
 let keepAliveInterval;
@@ -27,9 +78,10 @@ chrome.runtime.onInstalled.addListener(() => {
   console.log('Browse extension installed');
   keepServiceWorkerAlive();
   // Set default state
-  chrome.storage.local.get(['extensionEnabled', 'apiKey', 'provider', 'model', 'language'], (result) => {
+  chrome.storage.local.get(['extensionEnabled', 'openaiApiKey', 'geminiApiKey', 'provider', 'model', 'language'], (result) => {
     extensionEnabled = result.extensionEnabled ?? false;
-    apiKey = result.apiKey || '';
+    openaiApiKey = result.openaiApiKey || '';
+    geminiApiKey = result.geminiApiKey || '';
     provider = result.provider || 'openai';
     model = result.model || 'gpt-5.2';
     language = result.language || 'en';
@@ -52,8 +104,13 @@ chrome.storage.onChanged.addListener((changes, namespace) => {
     if (changes.extensionEnabled) {
       extensionEnabled = changes.extensionEnabled.newValue;
     }
-    if (changes.apiKey) {
-      apiKey = changes.apiKey.newValue;
+    if (changes.openaiApiKey) {
+      openaiApiKey = changes.openaiApiKey.newValue;
+      console.log('[SurfMate] OpenAI API key updated');
+    }
+    if (changes.geminiApiKey) {
+      geminiApiKey = changes.geminiApiKey.newValue;
+      console.log('[SurfMate] Gemini API key updated');
     }
     if (changes.provider) {
       provider = changes.provider.newValue;
@@ -110,14 +167,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   if (message.type === 'analyzePage') {
-    handleAnalyzePage(message)
+    queueRequest(() => handleAnalyzePage(message))
       .then(sendResponse)
       .catch(error => sendResponse({ error: error.message }));
     return true; // Keep message channel open for async response
   }
 
   if (message.type === 'analyzeContainer') {
-    handleAnalyzeContainer(message)
+    queueRequest(() => handleAnalyzeContainer(message))
       .then(sendResponse)
       .catch(error => sendResponse({ error: error.message }));
     return true; // Keep message channel open for async response
@@ -143,7 +200,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 // Analyze page using AI API with caching
 async function handleAnalyzePage(message) {
-  if (!apiKey) {
+  if (!getApiKey()) {
     return { error: 'API key not configured' };
   }
 
@@ -160,10 +217,20 @@ async function handleAnalyzePage(message) {
 
   console.log('[SurfMate] Cache miss, analyzing with', provider, 'using', model, '...');
 
-  // Determine API endpoint and parameters based on provider
-  const apiEndpoint = provider === 'groq'
-    ? 'https://api.groq.com/openai/v1/chat/completions'
-    : 'https://api.openai.com/v1/chat/completions';
+  // Use Gemini API handler
+  if (provider === 'gemini') {
+    return handleAnalyzePageGemini(message, cacheKey);
+  }
+
+  // OpenAI API (original code)
+  return handleAnalyzePageOpenAI(message, cacheKey);
+}
+
+// Handle OpenAI API calls
+async function handleAnalyzePageOpenAI(message, cacheKey) {
+  const { domSnapshot, url, title } = message;
+
+  const apiEndpoint = 'https://api.openai.com/v1/chat/completions';
 
   // Build request body
   const requestBody = {
@@ -280,28 +347,19 @@ Return a JSON object with "containers" (each with selector, label, type) and "st
         content: `Page URL: ${url}\nPage Title: ${title}\n${domSnapshot.isGradio ? '\n*** GRADIO APP *** This is a Gradio/ML application interface.\n' : ''}\n\nDOM Snapshot:\n${JSON.stringify(domSnapshot, null, 2)}\n\nAnalyze this page and return containers in WORKFLOW ORDER with MEANINGFUL, ACTION-ORIENTED labels that add value beyond visible text. Use exact selectors from the snapshot. Respond with JSON only.`
       }
     ],
-    // Use max_tokens for Groq, max_completion_tokens for OpenAI
-    ...(provider === 'groq' ? { max_tokens: 4000 } : { max_completion_tokens: 4000 }),
-    temperature: 0.1
+    max_completion_tokens: 4000,
+    temperature: 0.1,
+    response_format: { type: 'json_object' }
   };
 
-  // Add response_format for structured output
-  if (provider === 'groq') {
-    requestBody.response_format = { type: 'json_object' };
-  } else {
-    // Use json_object mode instead of strict json_schema for better compatibility
-    requestBody.response_format = { type: 'json_object' };
-  }
-
   console.log('[SurfMate] Sending request to', apiEndpoint);
-  console.log('[SurfMate] Request body:', JSON.stringify(requestBody, null, 2));
 
   try {
     const response = await fetch(apiEndpoint, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
+        'Authorization': `Bearer ${getApiKey()}`
       },
       body: JSON.stringify(requestBody)
     });
@@ -330,20 +388,8 @@ Return a JSON object with "containers" (each with selector, label, type) and "st
 
     // Parse JSON response
     let result;
-    let contentToParse = content;
-
-    // For Groq, try to extract JSON if wrapped in markdown or has extra text
-    if (provider === 'groq') {
-      // Try to find JSON object in the response
-      const jsonMatch = content.match(/\{[\s\S]*"containers"[\s\S]*"standalone"[\s\S]*\}/);
-      if (jsonMatch) {
-        contentToParse = jsonMatch[0];
-        console.log('[SurfMate] Extracted JSON from Groq response');
-      }
-    }
-
     try {
-      const parsed = JSON.parse(contentToParse);
+      const parsed = JSON.parse(content);
       console.log('[SurfMate] Parsed response:', parsed);
       result = {
         containers: parsed.containers || [],
@@ -351,8 +397,7 @@ Return a JSON object with "containers" (each with selector, label, type) and "st
       };
     } catch (e) {
       console.error('[SurfMate] Parse error:', e);
-      console.error('[SurfMate] Content that failed to parse:', contentToParse);
-      console.error('[SurfMate] Raw content:', content);
+      console.error('[SurfMate] Content that failed to parse:', content);
       throw new Error('Failed to parse LLM response: ' + e.message);
     }
 
@@ -372,15 +417,162 @@ Return a JSON object with "containers" (each with selector, label, type) and "st
   }
 }
 
+// Handle Gemini API calls
+async function handleAnalyzePageGemini(message, cacheKey) {
+  const { domSnapshot, url, title } = message;
+
+  const apiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${getApiKey()}`;
+
+  // Build the system prompt
+  const systemPrompt = `You are a web page navigation assistant. Analyze the DOM snapshot and identify:
+
+1. CONTAINERS (semantic sections with multiple interactive elements) - Return the container selector and label ONLY
+2. STANDALONE elements (important elements not in any container) - For elements that don't belong in any container
+
+*** IMPORTANT ***
+- For CONTAINERS: Only return the container selector, label, and type. DO NOT include elements inside containers.
+- Elements inside containers will be detected dynamically when the user enters the container.
+
+*** LANGUAGE ***
+${language === 'ko' ? 'ALL labels MUST be in Korean (한국어)' : 'ALL labels MUST be in English'}
+
+*** ORDER ***
+Return in workflow order: inputs → actions → outputs → settings → navigation
+
+*** LABELS ***
+Be descriptive: "Search box" not "input", "Submit form" not "button"
+
+Return ONLY JSON with "containers" and "standalone" arrays.`;
+
+  // Build user prompt with DOM snapshot
+  const userPrompt = `Page URL: ${url}\nPage Title: ${title}\n\nDOM Snapshot:\n${JSON.stringify(domSnapshot, null, 2)}`;
+
+  // Gemini API request format with structured output
+  const requestBody = {
+    contents: [{
+      parts: [
+        { text: systemPrompt + '\n\n' + userPrompt }
+      ]
+    }],
+    generationConfig: {
+      temperature: 0.1,
+      maxOutputTokens: 8192,
+      responseMimeType: 'application/json',
+      thinkingConfig: {
+        thinkingBudget: 0  // Disable thinking mode for faster responses
+      },
+      responseSchema: {
+        type: 'object',
+        properties: {
+          containers: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                selector: { type: 'string', description: 'CSS selector for the container element' },
+                label: { type: 'string', description: 'Human-readable label for the container' },
+                type: { type: 'string', description: 'Container type: navigation, main, form, list, card, section, etc.' }
+              },
+              required: ['selector', 'label', 'type']
+            }
+          },
+          standalone: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                selector: { type: 'string', description: 'CSS selector for the element' },
+                label: { type: 'string', description: 'Action-oriented label for this element' },
+                type: { type: 'string', description: 'Element type: button, link, input, textarea, select' }
+              },
+              required: ['selector', 'label', 'type']
+            }
+          }
+        },
+        required: ['containers', 'standalone']
+      }
+    }
+  };
+
+  console.log('[SurfMate] Sending request to Gemini API');
+
+  try {
+    const response = await fetchWithRetry(apiEndpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(requestBody)
+    });
+
+    console.log('[SurfMate] Response status:', response.status, response.statusText);
+
+    if (!response.ok) {
+      const error = await response.json();
+      console.error('[SurfMate] Gemini API error:', error);
+      throw new Error(error.error?.message || 'Gemini API request failed');
+    }
+
+    const data = await response.json();
+    console.log('[SurfMate] Gemini API response data:', data);
+
+    // Check if response was truncated due to token limit
+    const finishReason = data.candidates?.[0]?.finishReason;
+    if (finishReason === 'MAX_TOKENS') {
+      console.error('[SurfMate] Response was truncated due to maxOutputTokens limit');
+      throw new Error('Response too large - try reducing page complexity or increase token limit');
+    }
+
+    // Gemini returns text in candidates[0].content.parts[0].text
+    const content = data.candidates?.[0]?.content?.parts?.[0]?.text;
+
+    console.log('[SurfMate] Raw API response length:', content?.length);
+
+    if (!content || content.trim().length === 0) {
+      console.error('[SurfMate] Empty Gemini API response');
+      throw new Error('Empty response from Gemini API');
+    }
+
+    // Parse JSON response
+    let result;
+    try {
+      const parsed = JSON.parse(content);
+      console.log('[SurfMate] Parsed response:', parsed);
+      result = {
+        containers: parsed.containers || [],
+        standalone: parsed.standalone || []
+      };
+    } catch (e) {
+      console.error('[SurfMate] Parse error:', e);
+      console.error('[SurfMate] Content that failed to parse:', content);
+      throw new Error('Failed to parse Gemini response: ' + e.message);
+    }
+
+    // Cache the result
+    const cacheKey = `${url}|${provider}|${model}`;
+    pageCache.set(cacheKey, {
+      timestamp: Date.now(),
+      data: result
+    });
+
+    console.log('[SurfMate] Result cached for:', url);
+
+    return result;
+
+  } catch (error) {
+    console.error('[SurfMate] Gemini API error:', error);
+    return { error: error.message };
+  }
+}
+
 // Analyze a single container using AI API
 async function handleAnalyzeContainer(message) {
-  if (!apiKey) {
+  if (!getApiKey()) {
     return { error: 'API key not configured' };
   }
 
   const { domSnapshot, containerLabel, containerType } = message;
   const url = domSnapshot.url;
-  const title = domSnapshot.title;
 
   // Check cache first (include container label + provider+model in cache key)
   const cacheKey = `${url}|container|${containerLabel}|${provider}|${model}`;
@@ -393,12 +585,23 @@ async function handleAnalyzeContainer(message) {
 
   console.log('[SurfMate] Cache miss, analyzing container:', containerLabel, 'with', provider, 'using', model, '...');
 
-  // Determine API endpoint and parameters based on provider
-  const apiEndpoint = provider === 'groq'
-    ? 'https://api.groq.com/openai/v1/chat/completions'
-    : 'https://api.openai.com/v1/chat/completions';
+  // Use Gemini API handler
+  if (provider === 'gemini') {
+    return handleAnalyzeContainerGemini(message, cacheKey);
+  }
 
-  // Build request body for container analysis
+  // OpenAI API (original code)
+  return handleAnalyzeContainerOpenAI(message, cacheKey);
+}
+
+// Handle OpenAI API calls for container analysis
+async function handleAnalyzeContainerOpenAI(message, cacheKey) {
+  const { domSnapshot, containerLabel, containerType } = message;
+  const url = domSnapshot.url;
+  const title = domSnapshot.title;
+
+  const apiEndpoint = 'https://api.openai.com/v1/chat/completions';
+
   const requestBody = {
     model: model,
     messages: [
@@ -483,26 +686,19 @@ ${JSON.stringify(domSnapshot, null, 2)}
 Analyze this container and return interactive elements in WORKFLOW ORDER with MEANINGFUL, ACTION-ORIENTED labels that add value beyond visible text. Use exact selectors from the snapshot. Respond with JSON only.`
       }
     ],
-    ...(provider === 'groq' ? { max_tokens: 2000 } : { max_completion_tokens: 2000 }),
-    temperature: 0.1
+    max_completion_tokens: 2000,
+    temperature: 0.1,
+    response_format: { type: 'json_object' }
   };
 
-  // Add response_format for structured output
-  if (provider === 'groq') {
-    requestBody.response_format = { type: 'json_object' };
-  } else {
-    // Use json_object mode instead of strict json_schema for better compatibility
-    requestBody.response_format = { type: 'json_object' };
-  }
-
-  console.log('[SurfMate] Sending container analysis request to', apiEndpoint);
+  console.log('[SurfMate] Sending container analysis request to OpenAI');
 
   try {
     const response = await fetch(apiEndpoint, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
+        'Authorization': `Bearer ${getApiKey()}`
       },
       body: JSON.stringify(requestBody)
     });
@@ -520,40 +716,199 @@ Analyze this container and return interactive elements in WORKFLOW ORDER with ME
 
     console.log('[SurfMate] Raw API response length:', content?.length);
 
-    // Check if response is empty
     if (!content || content.trim().length === 0) {
       console.error('[SurfMate] Empty API response');
       console.error('[SurfMate] Full API response:', JSON.stringify(data, null, 2));
       throw new Error('Empty response from API');
     }
 
-    // Parse JSON response
-    let result;
-    let contentToParse = content;
+    const parsed = JSON.parse(content);
+    console.log('[SurfMate] Parsed container response:', parsed);
+    const result = {
+      elements: parsed.elements || []
+    };
 
-    // For Groq, try to extract JSON if wrapped in markdown
-    if (provider === 'groq') {
-      const jsonMatch = content.match(/\{[\s\S]*"elements"[\s\S]*\}/);
-      if (jsonMatch) {
-        contentToParse = jsonMatch[0];
-        console.log('[SurfMate] Extracted JSON from Groq response');
+    pageCache.set(cacheKey, {
+      timestamp: Date.now(),
+      data: result
+    });
+
+    console.log('[SurfMate] Container result cached for:', containerLabel);
+
+    return result;
+
+  } catch (error) {
+    console.error('[SurfMate] Container API error:', error);
+    return { error: error.message };
+  }
+}
+
+// Handle Gemini API calls for container analysis
+async function handleAnalyzeContainerGemini(message, cacheKey) {
+  const { domSnapshot, containerLabel, containerType } = message;
+  const url = domSnapshot.url;
+  const title = domSnapshot.title;
+
+  const apiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${getApiKey()}`;
+
+  const systemPrompt = `You are a web page navigation assistant. Analyze the DOM snapshot of a container section.
+
+IMPORTANT: Find AS MANY interactive elements as possible (up to 20).
+
+Include EVERYTHING that looks interactive:
+- All buttons (primary, secondary, icon buttons)
+- All links (navigation, actions, external links)
+- All form inputs (text, email, password, checkbox, radio, select, textarea)
+- All clickable elements with onclick handlers
+- All elements with tabindex
+
+DO NOT skip elements unless they are:
+- Purely decorative (icons without actions)
+- Duplicate/repeated items (like "read more" links appearing 10+ times)
+- Social media sharing links
+
+*** LANGUAGE ***
+${language === 'ko' ? `
+ALL labels MUST be in Korean (한국어).
+- Use natural Korean action verbs
+- Examples:
+  ❌ BAD: "Submit", "Search", "Save"
+  ✅ GOOD: "제출", "검색", "저장"
+  ✅ GOOD: "댓글 작성", "상품 검색", "변경사항 저장"
+- Keep labels SHORT (8-12 Korean characters)
+` : language === 'en' ? `
+ALL labels MUST be in English.
+- Use natural English action verbs
+` : ''}
+
+*** CRITICAL - ORDER BY WORKFLOW IMPORTANCE ***
+The ORDER of elements in your response determines their keyboard shortcut letters (a-z).
+Return elements in the LOGICAL ORDER a user should interact with them within this container:
+- First: Inputs and form fields
+- Second: Primary action buttons (submit, confirm, save)
+- Third: Secondary actions (cancel, delete, edit)
+- Last: Navigation and utility links
+
+*** CRITICAL - MEANINGFUL LABELS THAT ADD VALUE ***
+Your labels should provide CONTEXT and ACTIONABLE GUIDANCE, NOT just repeat visible text:
+- DO NOT just copy the button/input text - users can already see that!
+- INSTEAD: Describe the PURPOSE, ACTION, or OUTCOME
+- Use action verbs: "Enter...", "Click to...", "View...", "Adjust..."
+
+Examples:
+❌ BAD: "Submit", "Search", "Buy"
+✅ GOOD: "Post comment", "Find products", "Add to cart"
+
+❌ BAD: "Email", "Password", "Name"
+✅ GOOD: "Enter email", "Choose password", "Your full name"
+
+❌ BAD: "Edit", "Delete", "Cancel"
+✅ GOOD: "Modify item", "Remove item", "Go back"
+
+Keep labels SHORT (12-18 chars) but MEANINGFUL:
+- Focus on WHAT HAPPENS or WHAT TO DO
+- Include context when helpful
+
+CRITICAL - SELECTOR HANDLING:
+- Use the EXACT "selector" from the DOM snapshot for each element
+- DO NOT generate your own CSS selectors or modify existing ones
+- Examples:
+  * Snapshot has: "button.search" → Use: "button.search"
+  * Snapshot has: "#submit-btn" → Use: "#submit-btn"
+
+Return a JSON object with an "elements" array (up to 20 items) containing: selector, label, and type (button/link/input/textarea/select).`;
+
+  const userPrompt = `Container: ${containerLabel} (type: ${containerType})
+Page URL: ${url}
+Page Title: ${title}
+
+DOM Snapshot of this container:
+${JSON.stringify(domSnapshot, null, 2)}
+
+Analyze this container and return interactive elements in WORKFLOW ORDER with MEANINGFUL, ACTION-ORIENTED labels that add value beyond visible text. Use exact selectors from the snapshot. Respond with JSON only.`;
+
+  const requestBody = {
+    contents: [{
+      parts: [
+        { text: systemPrompt + '\n\n' + userPrompt }
+      ]
+    }],
+    generationConfig: {
+      temperature: 0.1,
+      maxOutputTokens: 4096,
+      responseMimeType: 'application/json',
+      thinkingConfig: {
+        thinkingBudget: 0  // Disable thinking mode for faster responses
+      },
+      responseSchema: {
+        type: 'object',
+        properties: {
+          elements: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                selector: { type: 'string', description: 'Exact CSS selector from DOM snapshot' },
+                label: { type: 'string', description: 'Action-oriented label describing what the element does' },
+                type: {
+                  type: 'string',
+                  description: 'Element type',
+                  enum: ['button', 'link', 'input', 'textarea', 'select']
+                }
+              },
+              required: ['selector', 'label', 'type']
+            }
+          }
+        },
+        required: ['elements']
       }
     }
+  };
 
-    try {
-      const parsed = JSON.parse(contentToParse);
-      console.log('[SurfMate] Parsed container response:', parsed);
-      result = {
-        elements: parsed.elements || []
-      };
-    } catch (e) {
-      console.error('[SurfMate] Parse error:', e);
-      console.error('[SurfMate] Content that failed to parse:', contentToParse);
-      console.error('[SurfMate] Raw content:', content);
-      throw new Error('Failed to parse LLM response: ' + e.message);
+  console.log('[SurfMate] Sending container analysis request to Gemini');
+
+  try {
+    const response = await fetchWithRetry(apiEndpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(requestBody)
+    });
+
+    console.log('[SurfMate] Response status:', response.status, response.statusText);
+
+    if (!response.ok) {
+      const error = await response.json();
+      console.error('[SurfMate] API error response:', error);
+      throw new Error(error.error?.message || 'API request failed');
     }
 
-    // Cache the result
+    const data = await response.json();
+
+    // Check if response was truncated due to token limit
+    const finishReason = data.candidates?.[0]?.finishReason;
+    if (finishReason === 'MAX_TOKENS') {
+      console.error('[SurfMate] Response was truncated due to maxOutputTokens limit');
+      throw new Error('Response too large - try reducing container complexity or increase token limit');
+    }
+
+    const content = data.candidates?.[0]?.content?.parts?.[0]?.text;
+
+    console.log('[SurfMate] Raw API response length:', content?.length);
+
+    if (!content || content.trim().length === 0) {
+      console.error('[SurfMate] Empty API response');
+      console.error('[SurfMate] Full API response:', JSON.stringify(data, null, 2));
+      throw new Error('Empty response from API');
+    }
+
+    const parsed = JSON.parse(content);
+    console.log('[SurfMate] Parsed container response:', parsed);
+    const result = {
+      elements: parsed.elements || []
+    };
+
     pageCache.set(cacheKey, {
       timestamp: Date.now(),
       data: result

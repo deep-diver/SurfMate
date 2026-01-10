@@ -274,7 +274,7 @@
     <div class="api-key-container">
       <select id="providerSelect" class="api-key-input">
         <option value="openai">OpenAI</option>
-        <option value="groq">Groq</option>
+        <option value="gemini">Gemini (Google AI)</option>
       </select>
     </div>
   </div>
@@ -298,18 +298,34 @@
     </div>
   </div>
 
-  <div class="section">
-    <div class="section-title">API Key</div>
+  <div class="section" id="openaiApiKeySection">
+    <div class="section-title">OpenAI API Key</div>
     <div class="api-key-container">
       <div class="api-key-input-wrapper">
         <input
           type="password"
-          id="apiKeyInput"
+          id="openaiApiKeyInput"
           class="api-key-input obscured"
-          placeholder="sk-... or gsk-..."
+          placeholder="sk-..."
           autocomplete="off"
         >
-        <button class="toggle-visibility" id="toggleVisibility" title="Show/hide API key"></button>
+        <button class="toggle-visibility" id="toggleOpenAIKeyVisibility" title="Show/hide API key"></button>
+      </div>
+    </div>
+  </div>
+
+  <div class="section" id="geminiApiKeySection">
+    <div class="section-title">Gemini API Key</div>
+    <div class="api-key-container">
+      <div class="api-key-input-wrapper">
+        <input
+          type="password"
+          id="geminiApiKeyInput"
+          class="api-key-input obscured"
+          placeholder="AIzaSy..."
+          autocomplete="off"
+        >
+        <button class="toggle-visibility" id="toggleGeminiKeyVisibility" title="Show/hide API key"></button>
       </div>
     </div>
   </div>

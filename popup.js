@@ -1,5 +1,6 @@
 // State
-let currentApiKey = '';
+let currentOpenAIKey = '';
+let currentGeminiKey = '';
 let currentProvider = 'openai';
 let currentModel = 'gpt-5.2';
 let extensionEnabled = false;
@@ -21,17 +22,12 @@ const PROVIDER_CONFIGS = {
     ],
     defaultModel: 'gpt-5.2'
   },
-  groq: {
-    name: 'Groq',
+  gemini: {
+    name: 'Gemini (Google AI)',
     models: [
-      { id: 'openai/gpt-oss-20b', name: 'GPT-OSS 20B (1000 T/s - Fastest!)' },
-      { id: 'meta-llama/llama-4-scout-17b-16e-instruct', name: 'Llama 4 Scout 17B (750 T/s)' },
-      { id: 'meta-llama/llama-4-maverick-17b-128e-instruct', name: 'Llama 4 Maverick 17B (600 T/s)' },
-      { id: 'llama-3.1-8b-instant', name: 'Llama 3.1 8B Instant (560 T/s)' },
-      { id: 'openai/gpt-oss-120b', name: 'GPT-OSS 120B (500 T/s)' },
-      { id: 'llama-3.3-70b-versatile', name: 'Llama 3.3 70B Versatile (280 T/s)' }
+      { id: 'gemini-3-flash-preview', name: 'Gemini 3.0 Flash' }
     ],
-    defaultModel: 'openai/gpt-oss-20b'
+    defaultModel: 'gemini-3-flash-preview'
   }
 };
 
@@ -39,8 +35,10 @@ const PROVIDER_CONFIGS = {
 const providerSelect = document.getElementById('providerSelect');
 const modelSelect = document.getElementById('modelSelect');
 const languageSelect = document.getElementById('languageSelect');
-const apiKeyInput = document.getElementById('apiKeyInput');
-const toggleVisibility = document.getElementById('toggleVisibility');
+const openaiApiKeyInput = document.getElementById('openaiApiKeyInput');
+const geminiApiKeyInput = document.getElementById('geminiApiKeyInput');
+const toggleOpenAIKeyVisibility = document.getElementById('toggleOpenAIKeyVisibility');
+const toggleGeminiKeyVisibility = document.getElementById('toggleGeminiKeyVisibility');
 const extensionToggle = document.getElementById('extensionToggle');
 const statusDot = document.getElementById('statusDot');
 const statusText = document.getElementById('statusText');
@@ -58,11 +56,17 @@ function populateModels(provider) {
   });
 }
 
+// Get current API key based on provider
+function getCurrentApiKey() {
+  return currentProvider === 'gemini' ? currentGeminiKey : currentOpenAIKey;
+}
+
 // Initialize
 function init() {
   // Load saved settings
-  chrome.storage.local.get(['apiKey', 'provider', 'model', 'extensionEnabled', 'language'], (result) => {
-    currentApiKey = result.apiKey || '';
+  chrome.storage.local.get(['openaiApiKey', 'geminiApiKey', 'provider', 'model', 'extensionEnabled', 'language'], (result) => {
+    currentOpenAIKey = result.openaiApiKey || '';
+    currentGeminiKey = result.geminiApiKey || '';
     currentProvider = result.provider || 'openai';
     currentModel = result.model || 'gpt-5.2';
     extensionEnabled = result.extensionEnabled ?? false;
@@ -74,25 +78,42 @@ function init() {
     modelSelect.value = currentModel;
     languageSelect.value = currentLanguage;
 
-    if (currentApiKey) {
-      apiKeyInput.value = currentApiKey;
-      statusDot.classList.add('active');
-      statusText.textContent = 'API key configured';
-    }
+    // Set API key inputs
+    openaiApiKeyInput.value = currentOpenAIKey;
+    geminiApiKeyInput.value = currentGeminiKey;
+
+    // Update status based on current provider's API key
+    updateStatus();
 
     extensionToggle.checked = extensionEnabled;
   });
 }
 
-// Save API key with debounce
+// Save OpenAI API key with debounce
 let saveTimeout;
-function saveApiKey() {
+function saveOpenAIKey() {
   clearTimeout(saveTimeout);
   saveTimeout = setTimeout(() => {
-    const newValue = apiKeyInput.value.trim();
-    if (newValue !== currentApiKey) {
-      currentApiKey = newValue;
-      chrome.storage.local.set({ apiKey: currentApiKey }, () => {
+    const newValue = openaiApiKeyInput.value.trim();
+    if (newValue !== currentOpenAIKey) {
+      currentOpenAIKey = newValue;
+      chrome.storage.local.set({ openaiApiKey: currentOpenAIKey }, () => {
+        showSaveIndicator();
+        updateStatus();
+        notifyContentScript();
+      });
+    }
+  }, 500);
+}
+
+// Save Gemini API key with debounce
+function saveGeminiKey() {
+  clearTimeout(saveTimeout);
+  saveTimeout = setTimeout(() => {
+    const newValue = geminiApiKeyInput.value.trim();
+    if (newValue !== currentGeminiKey) {
+      currentGeminiKey = newValue;
+      chrome.storage.local.set({ geminiApiKey: currentGeminiKey }, () => {
         showSaveIndicator();
         updateStatus();
         notifyContentScript();
@@ -113,6 +134,8 @@ function saveProvider() {
       currentModel = newModel;
       populateModels(currentProvider);
       modelSelect.value = currentModel;
+
+      updateStatus();
 
       chrome.storage.local.set({ provider: currentProvider, model: currentModel }, () => {
         showSaveIndicator();
@@ -163,7 +186,8 @@ function toggleExtension(enabled) {
 
 // Update status display
 function updateStatus() {
-  if (currentApiKey) {
+  const currentKey = getCurrentApiKey();
+  if (currentKey) {
     statusDot.classList.add('active');
     statusText.textContent = 'API key configured';
   } else {
@@ -186,7 +210,8 @@ function notifyContentScript() {
     if (tabs[0]?.id) {
       chrome.tabs.sendMessage(tabs[0].id, {
         type: 'settingsUpdated',
-        apiKey: currentApiKey,
+        apiKey: getCurrentApiKey(),
+        provider: currentProvider,
         extensionEnabled: extensionEnabled
       }).catch(() => {
         // Content script might not be loaded yet, that's okay
@@ -195,14 +220,21 @@ function notifyContentScript() {
   });
 }
 
-// Toggle API key visibility
-toggleVisibility.addEventListener('click', () => {
-  if (apiKeyInput.type === 'password') {
-    apiKeyInput.type = 'text';
-    toggleVisibility.textContent = '';
+// Toggle OpenAI API key visibility
+toggleOpenAIKeyVisibility.addEventListener('click', () => {
+  if (openaiApiKeyInput.type === 'password') {
+    openaiApiKeyInput.type = 'text';
   } else {
-    apiKeyInput.type = 'password';
-    toggleVisibility.textContent = '';
+    openaiApiKeyInput.type = 'password';
+  }
+});
+
+// Toggle Gemini API key visibility
+toggleGeminiKeyVisibility.addEventListener('click', () => {
+  if (geminiApiKeyInput.type === 'password') {
+    geminiApiKeyInput.type = 'text';
+  } else {
+    geminiApiKeyInput.type = 'password';
   }
 });
 
@@ -210,7 +242,8 @@ toggleVisibility.addEventListener('click', () => {
 providerSelect.addEventListener('change', saveProvider);
 modelSelect.addEventListener('change', saveModel);
 languageSelect.addEventListener('change', saveLanguage);
-apiKeyInput.addEventListener('input', saveApiKey);
+openaiApiKeyInput.addEventListener('input', saveOpenAIKey);
+geminiApiKeyInput.addEventListener('input', saveGeminiKey);
 extensionToggle.addEventListener('change', (e) => toggleExtension(e.target.checked));
 
 // Initialize on load
