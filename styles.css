@@ -29,12 +29,12 @@
 .browse-overlay {
   background:
     /* Nebula clouds layer */
-    radial-gradient(ellipse at 20% 20%, rgba(76, 29, 149, 0.15) 0%, transparent 50%),
-    radial-gradient(ellipse at 80% 80%, rgba(124, 58, 237, 0.12) 0%, transparent 50%),
-    radial-gradient(ellipse at 60% 30%, rgba(59, 130, 246, 0.1) 0%, transparent 40%),
-    radial-gradient(ellipse at 40% 70%, rgba(139, 92, 246, 0.08) 0%, transparent 45%),
-    /* Deep space base gradient */
-    radial-gradient(ellipse at bottom, #0f172a 0%, #020617 50%, #000000 100%);
+    radial-gradient(ellipse at 20% 20%, rgba(76, 29, 149, 0.03) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 80%, rgba(124, 58, 237, 0.025) 0%, transparent 50%),
+    radial-gradient(ellipse at 60% 30%, rgba(59, 130, 246, 0.02) 0%, transparent 40%),
+    radial-gradient(ellipse at 40% 70%, rgba(139, 92, 246, 0.015) 0%, transparent 45%),
+    /* Deep space base gradient - very transparent */
+    radial-gradient(ellipse at bottom, rgba(15, 23, 42, 0.15) 0%, rgba(2, 6, 23, 0.2) 50%, rgba(0, 0, 0, 0.25) 100%);
   background-attachment: fixed;
   animation: browseOverlayFadeIn 0.3s ease-out;
   overflow: visible !important;
@@ -89,7 +89,7 @@
     radial-gradient(2.5px 2.5px at 78% 18%, rgba(240, 245, 255, 0.75) 50%, transparent 50%),
     radial-gradient(2.5px 2.5px at 93% 48%, rgba(255, 255, 255, 0.8) 50%, transparent 50%);
   background-size: 100% 100%;
-  opacity: 0.7;
+  opacity: 0.25;
   animation: starTwinkle 8s ease-in-out infinite;
 }
 
@@ -121,7 +121,7 @@
     radial-gradient(2.5px 2.5px at 65% 85%, rgba(200, 220, 255, 0.9) 30%, transparent 70%),
     radial-gradient(6px 6px at 65% 85%, rgba(200, 220, 255, 0.18) 50%, transparent 50%);
   background-size: 100% 100%;
-  opacity: 0.8;
+  opacity: 0.15;
   animation: brightStarGlow 6s ease-in-out infinite alternate;
 }
 
@@ -205,11 +205,11 @@
     opacity: 0;
   }
   5% {
-    opacity: 1;
+    opacity: 0.4;
   }
   15% {
     transform: translateX(-150px) translateY(150px) rotate(-45deg) scaleX(1.5);
-    opacity: 1;
+    opacity: 0.4;
   }
   30% {
     transform: translateX(-300px) translateY(300px) rotate(-45deg) scaleX(0.8);
@@ -226,7 +226,7 @@
   position: absolute;
   border-radius: 50%;
   filter: blur(60px);
-  opacity: 0.08;
+  opacity: 0.02;
   pointer-events: none;
   animation: nebulaPulse 20s ease-in-out infinite;
 }
@@ -260,11 +260,11 @@
 
 @keyframes nebulaPulse {
   0%, 100% {
-    opacity: 0.06;
+    opacity: 0.015;
     transform: scale(1);
   }
   50% {
-    opacity: 0.1;
+    opacity: 0.025;
     transform: scale(1.1);
   }
 }
