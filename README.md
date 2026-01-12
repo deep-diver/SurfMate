@@ -15,7 +15,9 @@ SurfMate is a Chrome extension that uses AI (OpenAI GPT or Google Gemini) to ana
 - **Two-Level Navigation**: Navigate containers first (1-9), then elements inside (a-z)
 - **AI-Powered Analysis**: Uses LLMs to understand page structure and element context
 - **Smart Collision Handling**: Hints automatically reposition to avoid overlaps
-- **Hand-Drawn Aesthetic**: Sketchy borders and doodle-style UI with dynamic sparkle effects
+- **Magnificent Night Sky Background**: Beautiful cosmic atmosphere with twinkling stars, shooting stars, and nebula clouds
+- **Adaptive Background**: Solid night sky during loading, transparent after analysis completes
+- **Exact Search**: Prefix-based search for precise element matching
 - **Multi-Language Support**: English and Korean labels
 - **Multiple AI Providers**: Support for OpenAI (GPT-5.2, o3, o3-mini, etc.) and Google Gemini (3.0 Flash)
 - **Exact Bounding Boxes**: Visual feedback showing exactly what will be activated
@@ -78,6 +80,12 @@ cd SurfMate
 3. **Element Discovery**: When you enter a container, SurfMate dynamically finds all interactive elements
 4. **Smart Labeling**: The AI generates meaningful, action-oriented labels (not just "button" or "link")
 5. **Workflow Ordering**: Containers and elements are ordered based on logical user workflow
+
+### Visual Experience
+
+- **During Loading**: Solid night sky background with visible stars and nebula clouds
+- **After Loading**: Background becomes transparent, showing underlying content with subtle star overlay
+- **Smooth Transitions**: Automatic background adaptation as analysis completes
 
 ## Configuration Options
 
@@ -170,6 +178,15 @@ Hints use a smart positioning algorithm that tries 9 positions:
 4. Four corners
 
 This ensures all hints remain visible and don't overlap.
+
+### Night Sky Background
+
+The overlay features a magnificent night sky atmosphere:
+- **Multi-layered star field**: Four depth layers creating realistic 3D effect
+- **Twinkling stars**: Dynamic animations with varying brightness
+- **Shooting stars**: Occasional meteors streaking across the sky
+- **Nebula clouds**: Subtle cosmic gas clouds with breathing animations
+- **Adaptive transparency**: Solid background during loading, transparent after analysis
 
 ### Star Animations
 
