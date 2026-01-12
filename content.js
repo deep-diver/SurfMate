@@ -2874,6 +2874,9 @@ function activateElement(annotation, key) {
     } else {
       element.click();
     }
+
+    // Deactivate overlay after activation to return to normal page interaction
+    deactivate();
   }, 150);
 }
 
