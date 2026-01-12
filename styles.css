@@ -40,6 +40,28 @@
   overflow: visible !important;
 }
 
+/* Solid background during loading */
+.browse-overlay.browse-loading {
+  background:
+    /* Nebula clouds layer - more visible during loading */
+    radial-gradient(ellipse at 20% 20%, rgba(76, 29, 149, 0.15) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 80%, rgba(124, 58, 237, 0.12) 0%, transparent 50%),
+    radial-gradient(ellipse at 60% 30%, rgba(59, 130, 246, 0.1) 0%, transparent 40%),
+    radial-gradient(ellipse at 40% 70%, rgba(139, 92, 246, 0.08) 0%, transparent 45%),
+    /* Deep space base gradient - solid during loading */
+    radial-gradient(ellipse at bottom, #0f172a 0%, #020617 50%, #000000 100%);
+}
+
+/* More visible stars during loading */
+.browse-overlay.browse-loading::before {
+  opacity: 0.6;
+}
+
+/* More visible bright stars during loading */
+.browse-overlay.browse-loading::after {
+  opacity: 0.5;
+}
+
 /* Star field layers - creating depth */
 .browse-overlay::before {
   content: '';

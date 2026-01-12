@@ -528,45 +528,15 @@ function handleFollowModeKeydown(e) {
   }
 }
 
-// Fuzzy match function with scoring
+// Simple exact match function (fuzzy search disabled)
 function fuzzyMatch(text, query) {
   text = text.toLowerCase();
   query = query.toLowerCase();
 
   if (!query) return { score: 0, match: false };
 
-  // Exact match gets highest score
-  if (text === query) return { score: 100, match: true };
-
-  // Starts with query gets high score
-  if (text.startsWith(query)) return { score: 80, match: true };
-
-  // Contains query gets medium score
-  if (text.includes(query)) return { score: 60, match: true, highlight: query };
-
-  // Fuzzy match - character by character
-  let textIndex = 0;
-  let queryIndex = 0;
-  let score = 0;
-  let consecutiveMatches = 0;
-
-  while (textIndex < text.length && queryIndex < query.length) {
-    if (text[textIndex] === query[queryIndex]) {
-      score += 10 + consecutiveMatches * 2; // Bonus for consecutive matches
-      consecutiveMatches++;
-      queryIndex++;
-    } else {
-      consecutiveMatches = 0;
-      // Small penalty for skipping characters
-      score -= 1;
-    }
-    textIndex++;
-  }
-
-  // Only return as match if we found all characters
-  if (queryIndex === query.length) {
-    return { score: Math.max(20, score), match: true };
-  }
+  // Only exact match or starts with (no fuzzy matching)
+  if (text.startsWith(query)) return { score: 100, match: true, highlight: query };
 
   return { score: 0, match: false };
 }
@@ -856,6 +826,9 @@ let loadingInterval = null;
 function showLoadingProgress() {
   if (!state.overlay) return;
 
+  // Add loading class to overlay for solid background
+  state.overlay.classList.add('browse-loading');
+
   // Create loading HUD with background panel
   loadingProgressElement = document.createElement('div');
   loadingProgressElement.className = 'browse-loading-progress';
@@ -1002,6 +975,11 @@ function hideLoadingProgress() {
   if (loadingInterval) {
     clearInterval(loadingInterval);
     loadingInterval = null;
+  }
+
+  // Remove loading class to make background transparent
+  if (state.overlay) {
+    state.overlay.classList.remove('browse-loading');
   }
 
   if (loadingProgressElement) {
