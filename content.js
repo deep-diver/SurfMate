@@ -374,6 +374,13 @@ function handleKeyDown(e) {
     return;
   }
 
+  // Find additional containers: Shift+A
+  if (e.shiftKey && e.key === 'A' && !e.ctrlKey && !e.metaKey) {
+    e.preventDefault();
+    findAdditionalContainers();
+    return;
+  }
+
   // Macro recording: Ctrl+Shift+R
   if (e.ctrlKey && e.shiftKey && e.key === 'R') {
     e.preventDefault();
@@ -1038,6 +1045,84 @@ async function forceReload() {
   } else {
     // Re-analyze entire page with AI (finds containers and standalone elements)
     await reloadFullPage();
+  }
+}
+
+// Find additional containers (Shift+A)
+async function findAdditionalContainers() {
+  // Only works at container level
+  if (state.navigationLevel !== 'containers') {
+    showHUD('Shift+A only works at container level. Press Escape first.');
+    return;
+  }
+
+  // Collect existing container selectors to exclude
+  const existingSelectors = new Set();
+  state.containers.forEach(c => existingSelectors.add(c.selector));
+  state.standalone.forEach(s => existingSelectors.add(s.selector));
+
+  // Build container scopes - any element inside these containers should be ignored
+  const containerScopes = state.containers.map(c => c.selector);
+
+  showLoadingProgress();
+
+  try {
+    const snapshot = generateDOMSnapshot();
+
+    const response = await chrome.runtime.sendMessage({
+      type: 'findAdditionalContainers',
+      domSnapshot: snapshot,
+      excludeSelectors: Array.from(existingSelectors),
+      containerScopes: containerScopes
+    });
+
+    hideLoadingProgress();
+
+    if (response.error) {
+      showError(response.error);
+      return;
+    }
+
+    const newContainers = response.containers || [];
+    const newStandalone = response.standalone || [];
+
+    if (newContainers.length === 0 && newStandalone.length === 0) {
+      showHUD('No additional containers found');
+      return;
+    }
+
+    // Merge new containers with existing (avoid duplicates by selector)
+    const existingContainerSelectors = new Set(state.containers.map(c => c.selector));
+    const existingStandaloneSelectors = new Set(state.standalone.map(s => s.selector));
+
+    let addedContainers = 0;
+    newContainers.forEach(c => {
+      if (!existingContainerSelectors.has(c.selector)) {
+        state.containers.push(c);
+        existingContainerSelectors.add(c.selector);
+        addedContainers++;
+      }
+    });
+
+    let addedStandalone = 0;
+    newStandalone.forEach(s => {
+      if (!existingStandaloneSelectors.has(s.selector)) {
+        state.standalone.push(s);
+        existingStandaloneSelectors.add(s.selector);
+        addedStandalone++;
+      }
+    });
+
+    // Update annotations
+    state.annotations = [...state.containers, ...state.standalone];
+
+    // Re-render
+    renderContainers();
+
+    showHUD(`Found ${addedContainers} new containers, ${addedStandalone} new standalone elements`);
+  } catch (error) {
+    hideLoadingProgress();
+    showError(error.message);
   }
 }
 
@@ -3190,6 +3275,10 @@ function openCommandPalette() {
             <span class="browse-palette-key">Shift+R</span>
             <span class="browse-palette-desc">Force reload - re-analyze page</span>
           </div>
+          <div class="browse-palette-item" data-action="additional">
+            <span class="browse-palette-key">Shift+A</span>
+            <span class="browse-palette-desc">Find additional containers</span>
+          </div>
           <div class="browse-palette-divider"></div>
           <div class="browse-palette-item" data-action="follow">
             <span class="browse-palette-key">F</span>
@@ -3274,6 +3363,9 @@ function executeCommand(action) {
   switch (action) {
     case 'reload':
       forceReload();
+      break;
+    case 'additional':
+      findAdditionalContainers();
       break;
     case 'follow':
       enterFollowMode();
@@ -3453,6 +3545,7 @@ function showHelp() {
           <div class="browse-help-section">
             <h3>Actions</h3>
             <p><kbd>Shift+R</kbd> - Force reload (ignore cache)</p>
+            <p><kbd>Shift+A</kbd> - Find additional containers</p>
             <p><kbd>F</kbd> - Follow mode (search by typing)</p>
             <p><kbd>Ctrl+P</kbd> - Command palette</p>
           </div>

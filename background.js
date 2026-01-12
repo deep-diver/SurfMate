@@ -179,6 +179,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true; // Keep message channel open for async response
   }
 
+  if (message.type === 'findAdditionalContainers') {
+    queueRequest(() => handleFindAdditionalContainers(message))
+      .then(sendResponse)
+      .catch(error => sendResponse({ error: error.message }));
+    return true; // Keep message channel open for async response
+  }
+
   if (message.type === 'checkApiKey') {
     sendResponse({ hasApiKey: !!apiKey });
     return true;
@@ -919,6 +926,242 @@ Analyze this container and return interactive elements in WORKFLOW ORDER with ME
 
   } catch (error) {
     console.error('[SurfMate] Container API error:', error);
+    return { error: error.message };
+  }
+}
+
+
+// Find additional containers (Shift+A) - excludes already found ones
+async function handleFindAdditionalContainers(message) {
+  if (!getApiKey()) {
+    return { error: 'API key not configured' };
+  }
+
+  const { domSnapshot, excludeSelectors, containerScopes } = message;
+  const url = domSnapshot.url;
+
+  // Use Gemini API handler
+  if (provider === 'gemini') {
+    return handleFindAdditionalContainersGemini(message, url, containerScopes);
+  }
+
+  // OpenAI API
+  return handleFindAdditionalContainersOpenAI(message, url, containerScopes);
+}
+
+// OpenAI handler for finding additional containers
+async function handleFindAdditionalContainersOpenAI(message, url, containerScopes) {
+  const { domSnapshot, excludeSelectors } = message;
+  const title = domSnapshot.title;
+
+  const apiEndpoint = 'https://api.openai.com/v1/chat/completions';
+
+  // Build exclude list for prompt
+  const excludeList = excludeSelectors.map((s, i) => `${i + 1}. ${s}`).join('\n');
+
+  // Build container scope list - elements inside these should be ignored
+  const scopeList = containerScopes.map((s, i) => `${i + 1}. ${s}`).join('\n');
+
+  const requestBody = {
+    model: model,
+    messages: [
+      {
+        role: 'system',
+        content: `You are a web page navigation assistant. Find ADDITIONAL containers and standalone elements that were NOT already identified.
+
+IMPORTANT - Exclude these already found selectors:
+${excludeList}
+
+CRITICAL - IGNORE ALL ELEMENTS INSIDE THESE CONTAINERS:
+${scopeList}
+Any element that is a descendant (child, grandchild, etc.) of the containers above MUST be ignored. Only look for siblings or ancestors of these containers.
+
+Find:
+1. ADDITIONAL CONTAINERS - Semantic sections with multiple interactive elements (NOT in exclude list, NOT inside scope containers above)
+2. ADDITIONAL STANDALONE elements - Important standalone elements (NOT in exclude list, NOT inside scope containers above)
+
+Return JSON ONLY with this exact structure:
+{
+  "containers": [
+    {"selector": "css_selector", "label": "human_readable_label", "type": "container_type"}
+  ],
+  "standalone": [
+    {"selector": "css_selector", "label": "human_readable_label", "type": "element_type"}
+  ]
+}
+
+Rules:
+- DO NOT return any selector from the exclude list
+- DO NOT return any element that is inside/nested within the scope containers
+- Only return NEW/MISSING containers and elements at the same level or higher, not nested inside existing ones
+- Use CSS attribute selectors like [data-testid="..."] over complex nth-child
+- For dynamic classes use: [class*="partial-class-name"]
+- Escape single quotes in selectors with backslash: \\\'`
+      },
+      {
+        role: 'user',
+        content: `URL: ${url}\nTitle: ${title}\n\nDOM Snapshot:\n${JSON.stringify(domSnapshot, null, 2)}`
+      }
+    ],
+    temperature: 0.1,
+    max_tokens: 4000,
+    response_format: { type: "json_object" }
+  };
+
+  try {
+    const response = await fetchWithRetry(apiEndpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${getApiKey()}`
+      },
+      body: JSON.stringify(requestBody)
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`API error: ${response.status} - ${errorText}`);
+    }
+
+    const data = await response.json();
+    const content = data.choices[0].message.content;
+
+    console.log('[SurfMate] Additional containers response:', content);
+
+    const parsed = JSON.parse(content);
+    const result = {
+      containers: parsed.containers || [],
+      standalone: parsed.standalone || []
+    };
+
+    console.log('[SurfMate] Found additional containers:', result.containers.length, 'standalone:', result.standalone.length);
+
+    return result;
+
+  } catch (error) {
+    console.error('[SurfMate] Additional containers API error:', error);
+    return { error: error.message };
+  }
+}
+
+// Gemini handler for finding additional containers
+async function handleFindAdditionalContainersGemini(message, url, containerScopes) {
+  const { domSnapshot, excludeSelectors } = message;
+  const title = domSnapshot.title;
+
+  const apiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${getApiKey()}`;
+
+  // Build exclude list for prompt
+  const excludeList = excludeSelectors.map((s, i) => `${i + 1}. ${s}`).join('\n');
+
+  // Build container scope list - elements inside these should be ignored
+  const scopeList = containerScopes.map((s, i) => `${i + 1}. ${s}`).join('\n');
+
+  const systemPrompt = `You are a web page navigation assistant. Find ADDITIONAL containers and standalone elements that were NOT already identified.
+
+IMPORTANT - Exclude these already found selectors:
+${excludeList}
+
+CRITICAL - IGNORE ALL ELEMENTS INSIDE THESE CONTAINERS:
+${scopeList}
+Any element that is a descendant (child, grandchild, etc.) of the containers above MUST be ignored. Only look for siblings or ancestors of these containers.
+
+Find:
+1. ADDITIONAL CONTAINERS - Semantic sections with multiple interactive elements (NOT in exclude list, NOT inside scope containers above)
+2. ADDITIONAL STANDALONE elements - Important standalone elements (NOT in exclude list, NOT inside scope containers above)
+
+Return JSON with this structure:
+{
+  "containers": [
+    {"selector": "css_selector", "label": "human_readable_label", "type": "container_type"}
+  ],
+  "standalone": [
+    {"selector": "css_selector", "label": "human_readable_label", "type": "element_type"}
+  ]
+}
+
+Rules:
+- DO NOT return any selector from the exclude list
+- DO NOT return any element that is inside/nested within the scope containers
+- Only return NEW/MISSING containers and elements at the same level or higher, not nested inside existing ones`;
+
+  const userPrompt = `URL: ${url}\nTitle: ${title}\n\nDOM Snapshot:\n${JSON.stringify(domSnapshot, null, 2)}`;
+
+  const requestBody = {
+    contents: [{
+      parts: [{ text: systemPrompt + '\n\n' + userPrompt }]
+    }],
+    generationConfig: {
+      temperature: 0.1,
+      maxOutputTokens: 4096,
+      responseMimeType: "application/json",
+      thinkingConfig: {
+        thinkingBudget: 0
+      },
+      responseSchema: {
+        type: "object",
+        properties: {
+          containers: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                selector: { type: "string" },
+                label: { type: "string" },
+                type: { type: "string" }
+              },
+              required: ["selector", "label", "type"]
+            }
+          },
+          standalone: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                selector: { type: "string" },
+                label: { type: "string" },
+                type: { type: "string" }
+              },
+              required: ["selector", "label", "type"]
+            }
+          }
+        },
+        required: ["containers", "standalone"]
+      }
+    }
+  };
+
+  try {
+    const response = await fetchWithRetry(apiEndpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(requestBody)
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Gemini API error: ${response.status} - ${errorText}`);
+    }
+
+    const data = await response.json();
+    const content = data.candidates[0].content.parts[0].text;
+
+    console.log('[SurfMate] Additional containers response:', content);
+
+    const parsed = JSON.parse(content);
+    const result = {
+      containers: parsed.containers || [],
+      standalone: parsed.standalone || []
+    };
+
+    console.log('[SurfMate] Found additional containers:', result.containers.length, 'standalone:', result.standalone.length);
+
+    return result;
+
+  } catch (error) {
+    console.error('[SurfMate] Additional containers API error:', error);
     return { error: error.message };
   }
 }
