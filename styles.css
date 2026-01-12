@@ -22,6 +22,254 @@
 }
 
 /* ============================================
+   NIGHT SKY / UNIVERSE BACKGROUND
+   ============================================ */
+
+/* Deep cosmic gradient background */
+.browse-overlay {
+  background:
+    /* Nebula clouds layer */
+    radial-gradient(ellipse at 20% 20%, rgba(76, 29, 149, 0.15) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 80%, rgba(124, 58, 237, 0.12) 0%, transparent 50%),
+    radial-gradient(ellipse at 60% 30%, rgba(59, 130, 246, 0.1) 0%, transparent 40%),
+    radial-gradient(ellipse at 40% 70%, rgba(139, 92, 246, 0.08) 0%, transparent 45%),
+    /* Deep space base gradient */
+    radial-gradient(ellipse at bottom, #0f172a 0%, #020617 50%, #000000 100%);
+  background-attachment: fixed;
+  animation: browseOverlayFadeIn 0.3s ease-out;
+  overflow: visible !important;
+}
+
+/* Star field layers - creating depth */
+.browse-overlay::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  background-image:
+    /* Tiny distant stars - layer 1 (farthest) */
+    radial-gradient(1px 1px at 10% 15%, rgba(255, 255, 255, 0.4) 50%, transparent 50%),
+    radial-gradient(1px 1px at 25% 35%, rgba(255, 255, 255, 0.3) 50%, transparent 50%),
+    radial-gradient(1px 1px at 40% 55%, rgba(255, 255, 255, 0.35) 50%, transparent 50%),
+    radial-gradient(1px 1px at 55% 20%, rgba(255, 255, 255, 0.4) 50%, transparent 50%),
+    radial-gradient(1px 1px at 70% 45%, rgba(255, 255, 255, 0.3) 50%, transparent 50%),
+    radial-gradient(1px 1px at 85% 75%, rgba(255, 255, 255, 0.35) 50%, transparent 50%),
+    radial-gradient(1px 1px at 95% 25%, rgba(255, 255, 255, 0.4) 50%, transparent 50%),
+    radial-gradient(1px 1px at 15% 65%, rgba(255, 255, 255, 0.3) 50%, transparent 50%),
+    radial-gradient(1px 1px at 30% 85%, rgba(255, 255, 255, 0.35) 50%, transparent 50%),
+    radial-gradient(1px 1px at 50% 10%, rgba(255, 255, 255, 0.4) 50%, transparent 50%),
+    radial-gradient(1px 1px at 65% 90%, rgba(255, 255, 255, 0.3) 50%, transparent 50%),
+    radial-gradient(1px 1px at 80% 5%, rgba(255, 255, 255, 0.35) 50%, transparent 50%),
+    /* Small stars - layer 2 (middle distance) */
+    radial-gradient(1.5px 1.5px at 5% 25%, rgba(200, 220, 255, 0.5) 50%, transparent 50%),
+    radial-gradient(1.5px 1.5px at 20% 50%, rgba(220, 235, 255, 0.45) 50%, transparent 50%),
+    radial-gradient(1.5px 1.5px at 35% 75%, rgba(200, 220, 255, 0.5) 50%, transparent 50%),
+    radial-gradient(1.5px 1.5px at 45% 15%, rgba(220, 235, 255, 0.45) 50%, transparent 50%),
+    radial-gradient(1.5px 1.5px at 60% 40%, rgba(200, 220, 255, 0.5) 50%, transparent 50%),
+    radial-gradient(1.5px 1.5px at 75% 65%, rgba(220, 235, 255, 0.45) 50%, transparent 50%),
+    radial-gradient(1.5px 1.5px at 90% 30%, rgba(200, 220, 255, 0.5) 50%, transparent 50%),
+    radial-gradient(1.5px 1.5px at 12% 80%, rgba(220, 235, 255, 0.45) 50%, transparent 50%),
+    /* Medium stars - layer 3 (closer) */
+    radial-gradient(2px 2px at 8% 40%, rgba(255, 255, 255, 0.6) 50%, transparent 50%),
+    radial-gradient(2px 2px at 22% 70%, rgba(230, 240, 255, 0.55) 50%, transparent 50%),
+    radial-gradient(2px 2px at 38% 30%, rgba(255, 255, 255, 0.6) 50%, transparent 50%),
+    radial-gradient(2px 2px at 52% 85%, rgba(230, 240, 255, 0.55) 50%, transparent 50%),
+    radial-gradient(2px 2px at 68% 55%, rgba(255, 255, 255, 0.6) 50%, transparent 50%),
+    radial-gradient(2px 2px at 82% 20%, rgba(230, 240, 255, 0.55) 50%, transparent 50%),
+    radial-gradient(2px 2px at 92% 60%, rgba(255, 255, 255, 0.6) 50%, transparent 50%),
+    /* Bright stars - layer 4 (closest) */
+    radial-gradient(2.5px 2.5px at 3% 55%, rgba(255, 255, 255, 0.8) 50%, transparent 50%),
+    radial-gradient(2.5px 2.5px at 18% 12%, rgba(240, 245, 255, 0.75) 50%, transparent 50%),
+    radial-gradient(2.5px 2.5px at 33% 88%, rgba(255, 255, 255, 0.8) 50%, transparent 50%),
+    radial-gradient(2.5px 2.5px at 48% 33%, rgba(240, 245, 255, 0.75) 50%, transparent 50%),
+    radial-gradient(2.5px 2.5px at 63% 72%, rgba(255, 255, 255, 0.8) 50%, transparent 50%),
+    radial-gradient(2.5px 2.5px at 78% 18%, rgba(240, 245, 255, 0.75) 50%, transparent 50%),
+    radial-gradient(2.5px 2.5px at 93% 48%, rgba(255, 255, 255, 0.8) 50%, transparent 50%);
+  background-size: 100% 100%;
+  opacity: 0.7;
+  animation: starTwinkle 8s ease-in-out infinite;
+}
+
+/* Extra bright stars with glow */
+.browse-overlay::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  background-image:
+    /* Extra bright stars with glow effect */
+    radial-gradient(3px 3px at 15% 20%, rgba(255, 255, 255, 1) 30%, transparent 70%),
+    radial-gradient(8px 8px at 15% 20%, rgba(255, 255, 255, 0.3) 50%, transparent 50%),
+    radial-gradient(3px 3px at 45% 60%, rgba(255, 255, 255, 1) 30%, transparent 70%),
+    radial-gradient(8px 8px at 45% 60%, rgba(255, 255, 255, 0.25) 50%, transparent 50%),
+    radial-gradient(3px 3px at 75% 35%, rgba(255, 255, 255, 1) 30%, transparent 70%),
+    radial-gradient(8px 8px at 75% 35%, rgba(255, 255, 255, 0.3) 50%, transparent 50%),
+    radial-gradient(3px 3px at 25% 80%, rgba(200, 220, 255, 0.95) 30%, transparent 70%),
+    radial-gradient(7px 7px at 25% 80%, rgba(200, 220, 255, 0.2) 50%, transparent 50%),
+    radial-gradient(3px 3px at 85% 65%, rgba(255, 255, 255, 1) 30%, transparent 70%),
+    radial-gradient(8px 8px at 85% 65%, rgba(255, 255, 255, 0.28) 50%, transparent 50%),
+    radial-gradient(2.5px 2.5px at 55% 45%, rgba(230, 240, 255, 0.9) 30%, transparent 70%),
+    radial-gradient(6px 6px at 55% 45%, rgba(230, 240, 255, 0.2) 50%, transparent 50%),
+    radial-gradient(2.5px 2.5px at 35% 25%, rgba(255, 255, 255, 0.95) 30%, transparent 70%),
+    radial-gradient(7px 7px at 35% 25%, rgba(255, 255, 255, 0.22) 50%, transparent 50%),
+    radial-gradient(2.5px 2.5px at 65% 85%, rgba(200, 220, 255, 0.9) 30%, transparent 70%),
+    radial-gradient(6px 6px at 65% 85%, rgba(200, 220, 255, 0.18) 50%, transparent 50%);
+  background-size: 100% 100%;
+  opacity: 0.8;
+  animation: brightStarGlow 6s ease-in-out infinite alternate;
+}
+
+/* Twinkling animation for background stars */
+@keyframes starTwinkle {
+  0%, 100% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 0.85;
+  }
+}
+
+/* Pulsing glow for bright stars */
+@keyframes brightStarGlow {
+  0% {
+    opacity: 0.7;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1.05);
+  }
+}
+
+/* Shooting star effect */
+.browse-overlay .shooting-star {
+  position: absolute;
+  width: 100px;
+  height: 2px;
+  background: linear-gradient(90deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.8) 50%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  border-radius: 50%;
+  filter: blur(0.5px);
+  opacity: 0;
+  pointer-events: none;
+  animation: shootingStarFall 4s ease-in-out infinite;
+}
+
+.browse-overlay .shooting-star:nth-child(1) {
+  top: 10%;
+  left: 80%;
+  animation-delay: 0s;
+  animation-duration: 3.5s;
+}
+
+.browse-overlay .shooting-star:nth-child(2) {
+  top: 30%;
+  left: 60%;
+  animation-delay: 2s;
+  animation-duration: 4s;
+}
+
+.browse-overlay .shooting-star:nth-child(3) {
+  top: 50%;
+  left: 90%;
+  animation-delay: 4s;
+  animation-duration: 3s;
+}
+
+.browse-overlay .shooting-star:nth-child(4) {
+  top: 70%;
+  left: 70%;
+  animation-delay: 6s;
+  animation-duration: 3.8s;
+}
+
+.browse-overlay .shooting-star:nth-child(5) {
+  top: 20%;
+  left: 40%;
+  animation-delay: 1s;
+  animation-duration: 4.2s;
+}
+
+@keyframes shootingStarFall {
+  0% {
+    transform: translateX(0) translateY(0) rotate(-45deg) scaleX(0.5);
+    opacity: 0;
+  }
+  5% {
+    opacity: 1;
+  }
+  15% {
+    transform: translateX(-150px) translateY(150px) rotate(-45deg) scaleX(1.5);
+    opacity: 1;
+  }
+  30% {
+    transform: translateX(-300px) translateY(300px) rotate(-45deg) scaleX(0.8);
+    opacity: 0;
+  }
+  100% {
+    transform: translateX(-300px) translateY(300px) rotate(-45deg) scaleX(0.8);
+    opacity: 0;
+  }
+}
+
+/* Nebula glow effect */
+.browse-nebula {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(60px);
+  opacity: 0.08;
+  pointer-events: none;
+  animation: nebulaPulse 20s ease-in-out infinite;
+}
+
+.browse-nebula:nth-child(1) {
+  top: 10%;
+  left: 20%;
+  width: 300px;
+  height: 300px;
+  background: radial-gradient(circle, rgba(139, 92, 246, 0.4) 0%, transparent 70%);
+  animation-delay: 0s;
+}
+
+.browse-nebula:nth-child(2) {
+  top: 60%;
+  right: 15%;
+  width: 400px;
+  height: 400px;
+  background: radial-gradient(circle, rgba(59, 130, 246, 0.35) 0%, transparent 70%);
+  animation-delay: 7s;
+}
+
+.browse-nebula:nth-child(3) {
+  bottom: 20%;
+  left: 30%;
+  width: 350px;
+  height: 350px;
+  background: radial-gradient(circle, rgba(168, 85, 247, 0.3) 0%, transparent 70%);
+  animation-delay: 14s;
+}
+
+@keyframes nebulaPulse {
+  0%, 100% {
+    opacity: 0.06;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.1;
+    transform: scale(1.1);
+  }
+}
+
+/* ============================================
    HINTS & BORDERS
    ============================================ */
 
@@ -892,12 +1140,6 @@
 /* ============================================
    OVERLAY FADE TRANSITIONS
    ============================================ */
-
-/* Overlay fade in on activation */
-.browse-overlay {
-  animation: browseOverlayFadeIn 0.3s ease-out;
-  overflow: visible !important;
-}
 
 @keyframes browseOverlayFadeIn {
   from {

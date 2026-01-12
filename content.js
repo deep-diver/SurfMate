@@ -2932,6 +2932,20 @@ function createOverlay() {
     overflow: visible;
   `;
 
+  // Add shooting stars for night sky effect
+  for (let i = 0; i < 5; i++) {
+    const shootingStar = document.createElement('div');
+    shootingStar.className = 'shooting-star';
+    state.overlay.appendChild(shootingStar);
+  }
+
+  // Add nebula clouds for cosmic atmosphere
+  for (let i = 0; i < 3; i++) {
+    const nebula = document.createElement('div');
+    nebula.className = 'browse-nebula';
+    state.overlay.appendChild(nebula);
+  }
+
   document.body.appendChild(state.overlay);
 }
 
