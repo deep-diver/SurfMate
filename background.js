@@ -11,9 +11,8 @@ function getApiKey() {
   return provider === 'gemini' ? geminiApiKey : openaiApiKey;
 }
 
-// Cache for analyzed pages
+// Cache for analyzed pages (no TTL - cache persists until manually cleared)
 const pageCache = new Map();
-const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
 // Request queue to prevent rate limiting - sequentialize API calls
 let apiQueue = Promise.resolve();
@@ -210,7 +209,7 @@ async function handleAnalyzePage(message) {
   const cacheKey = `${url}|${provider}|${model}`;
   const cached = pageCache.get(cacheKey);
 
-  if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
+  if (cached) {
     console.log('[SurfMate] Cache hit for:', url);
     return cached.data;
   }
@@ -578,7 +577,7 @@ async function handleAnalyzeContainer(message) {
   const cacheKey = `${url}|container|${containerLabel}|${provider}|${model}`;
   const cached = pageCache.get(cacheKey);
 
-  if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
+  if (cached) {
     console.log('[SurfMate] Cache hit for container:', containerLabel);
     return cached.data;
   }
